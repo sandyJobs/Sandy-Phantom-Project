@@ -37,7 +37,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// For a GET webhook, the data is in the query parameters\n// The parameters are available in $input.all()[0].query\n\n// Get the query object from the webhook input\nconst queryData = $input.first().json.query;\n\n// Check if the query object and required parameters exist\nif (queryData && queryData.decision && queryData.record_id) {\n  const decision = queryData.decision;\n  const recordId = queryData.record_id;\n\n  // Prepare the output for the next nodes\n  return [{\n    json: {\n      decision: decision,\n      airtableRecordId: recordId,\n      originalQuery: queryData // Pass through for debugging\n    }\n  }];\n} else {\n  // Handle the error case if parameters are missing\n  // Let's see what we actually received for debugging\n  console.log(\"Received Query Data:\", JSON.stringify(queryData, null, 2));\n  throw new Error(\"Missing required parameters: 'decision' and 'record_id'. Check the console for received data.\");\n}"
+        "jsCode": "// Parse decision webhook query and normalize fields\nconst queryData = $input.first().json.query;\nif (queryData && queryData.decision && queryData.record_id) {\n  const decision = (queryData.decision || '').toString();\n  const recordId = (queryData.record_id || '').toString();\n  return [{ json: {\n    decision,\n    Status: decision,\n    record_id: recordId,\n    airtableRecordId: recordId, // legacy compatibility\n    originalQuery: queryData\n  } }];\n} else {\n  console.log('Received Query Data:', JSON.stringify(queryData, null, 2));\n  throw new Error(\"Missing required parameters: 'decision' and 'record_id'.\");\n}"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -125,7 +125,7 @@
           "mode": "list",
           "cachedResultName": "escalations"
         },
-        "text": "=A new inquiry has been escalated and requires expert review.\n\nTask: {{ $json[\"Task Description\"] }}\n\nStatus: {{ $json.Status }}",
+        "text": "=A new inquiry has been escalated and requires expert review.\n\nRecord ID: {{ $json.record_id || $json['Record ID'] }}\nStatus: {{ ($json.status || $json.Status) || 'escalated' }}",
         "otherOptions": {
           "includeLinkToWorkflow": false
         }
@@ -181,50 +181,31 @@
     },
     {
       "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "filtersUI": {
-          "values": [
-            {
-              "lookupColumn": "Status",
-              "lookupValue": "Under review"
-            }
-          ]
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -448,
         80
       ],
       "id": "fa887781-a68a-4fda-8836-5edd04fac341",
-      "name": "status inReview",
+      "name": "Fetch Under Review (VA)",
       "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "jsCode": "// For each item from Airtable, build the review links\nconst recordId = $input.first().json['Record ID'];\nconst inquiry = $input.first().json.Inquiry;\nconst aiDraft = $input.first().json['AI Draft'];\n\n// Get your n8n base URL (you might need to set this as a variable)\nconst n8nWebhookBaseUrl = 'https://n8n.arctix.ai/webhook/review';\n\n// Build the unique links for each action\nconst approveLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=approve`;\nconst editLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=edit`;\nconst rejectLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=reject`;\nconst escalateLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=escalate`;\n\n// Create the plain text message for Slack\n// NOTE: We are using backticks (`) to create the string, so any internal backticks must be escaped with a backslash (\\`)\nconst messageText = `\n⚠️ *New Draft Ready for Review* 🚀\n\n*Record ID:* ${recordId}\n*Inquiry:* ${inquiry}\n*AI Draft:* ${aiDraft}\n\n*Please click one of the links below to take action:*\n✅ Approve: ${approveLink}\n✏️  Edit: ${editLink}\n❌ Reject: ${rejectLink}\n🔺 Escalate: ${escalateLink}\n`;\n\n// Assign it to the item's JSON\n$json.slackMessage = messageText;\n\nreturn $json;"
+        "jsCode": "// Build Slack message with dynamic N8N base URL and normalized fields\nconst input = $input.first().json || {};\nconst recordId = input.record_id || input['Record ID'] || input['Record Id'] || 'unknown';\nconst inquiry = input.inquiry || input.Inquiry || '';\nconst aiDraft = input.ai_draft || input['AI Draft'] || '';\nconst base = input.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://dummy-n8n.example.com';\nconst n8nWebhookBaseUrl = `${base}/webhook/review`;\n\nconst approveLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=approve`;\nconst editLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=edit`;\nconst rejectLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=reject`;\nconst escalateLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=escalate`;\n\nconst messageText = `\n⚠️ *New Draft Ready for Review* 🚀\n\n*Record ID:* ${recordId}\n*Inquiry:* ${inquiry}\n*AI Draft:* ${aiDraft}\n\n*Please click one of the links below to take action:*\n✅ Approve: ${approveLink}\n✏️  Edit: ${editLink}\n❌ Reject: ${rejectLink}\n🔺 Escalate: ${escalateLink}\n`;\n\n$json.slackMessage = messageText;\n$json.record_id = recordId;\n$json.inquiry = inquiry;\n$json.ai_draft = aiDraft;\nreturn $json;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -249,145 +230,53 @@
     },
     {
       "parameters": {
-        "operation": "update",
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + ($json.record_id || $json['Record ID'] || $json.airtableRecordId) }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Status": "={{ $json.decision }}",
-            "Record ID": "={{ $json.airtableRecordId }}"
-          },
-          "matchingColumns": [
-            "Record ID"
-          ],
-          "schema": [
-            {
-              "id": "Record ID",
-              "displayName": "Record ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Inquiry",
-              "displayName": "Inquiry",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "AI Draft",
-              "displayName": "AI Draft",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "row_number",
-              "displayName": "row_number",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "canBeUsedToMatch": true,
-              "readOnly": true,
-              "removed": true
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "PATCH",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ status: ($json.decision || $json.Status || '').toString().toLowerCase() }) }}"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -208,
         336
       ],
       "id": "3adeb93c-39a2-4545-95f9-f60f316b8868",
-      "name": "change status",
+      "name": "change status (VA)",
       "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "filtersUI": {
-          "values": [
-            {
-              "lookupColumn": "Status",
-              "lookupValue": "escalate"
-            }
-          ]
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -656,
         608
       ],
       "id": "81e5622c-f6fc-4d77-aa95-5c0c40dd790a",
-      "name": "reFetch Data",
+      "name": "Fetch Escalations (VA)",
       "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -470,114 +359,29 @@
     },
     {
       "parameters": {
-        "operation": "update",
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + ($json.record_id || $json['Record ID']) }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Status": "={{ $json.Status }}",
-            "row_number": "={{ $json.row_number }}",
-            "check": "not sent"
-          },
-          "matchingColumns": [
-            "row_number"
-          ],
-          "schema": [
-            {
-              "id": "Record ID",
-              "displayName": "Record ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Inquiry",
-              "displayName": "Inquiry",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "AI Draft",
-              "displayName": "AI Draft",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "check",
-              "displayName": "check",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "row_number",
-              "displayName": "row_number",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "canBeUsedToMatch": true,
-              "readOnly": true,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "PATCH",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ status: $json.Status || 'completed' }) }}"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -464,
         928
       ],
       "id": "fd20addc-cb00-4fd5-8619-24b489ac47e1",
-      "name": "completed",
+      "name": "Mark Completed (VA)",
       "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -596,46 +400,27 @@
     },
     {
       "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "filtersUI": {
-          "values": [
-            {
-              "lookupColumn": "EscalateStatus",
-              "lookupValue": "wait"
-            }
-          ]
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -80,
         928
       ],
       "id": "b8e328e5-7b7b-419b-87e2-81a26a0708e4",
-      "name": "getId",
+      "name": "Fetch Completed (VA)",
       "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -693,125 +478,29 @@
     },
     {
       "parameters": {
-        "operation": "update",
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/audit' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "row_number": "={{ $json.row_number }}",
-            "Record ID": "={{ $json['Record ID'] }}",
-            "check": "sent",
-            "EscalateStatus": "Done"
-          },
-          "matchingColumns": [
-            "row_number"
-          ],
-          "schema": [
-            {
-              "id": "Record ID",
-              "displayName": "Record ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Inquiry",
-              "displayName": "Inquiry",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": true
-            },
-            {
-              "id": "AI Draft",
-              "displayName": "AI Draft",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": true
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": true
-            },
-            {
-              "id": "check",
-              "displayName": "check",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "EscalateStatus",
-              "displayName": "EscalateStatus",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "row_number",
-              "displayName": "row_number",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "number",
-              "canBeUsedToMatch": true,
-              "readOnly": true,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ action: 'ESCALATION_SENT', event: 'Notification sent', meta: { record_id: $json['Record ID'] || $json.record_id }, created_at: new Date().toISOString() }) }}"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         592,
         1088
       ],
       "id": "5e6ef7f4-5024-42ac-bd3e-a8b6071f5e8d",
-      "name": "sent",
+      "name": "Audit Escalation (VA)",
       "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -830,7 +519,7 @@
     },
     {
       "parameters": {
-        "path": "0e4309c1-b600-45d5-a2ca-b12968875b25",
+        "path": "incoming",
         "options": {}
       },
       "type": "n8n-nodes-base.webhook",
@@ -845,71 +534,29 @@
     },
     {
       "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 236556661,
-          "mode": "list",
-          "cachedResultName": "Escalated task",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=236556661"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Task Description": "={{ $json[\"AI Draft\"] }}",
-            "Status": "in progress"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Task Description",
-              "displayName": "Task Description",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || $json['Record ID'], description: $json['AI Draft'] || $json.ai_draft || '', status: 'in progress', created_at: new Date().toISOString() }) }}"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -368,
         608
       ],
       "id": "ee3dd1dc-5ae7-4662-9a87-6e240697676e",
-      "name": "in progress",
+      "name": "Create Escalation (VA)",
       "retryOnFail": true,
-      "waitBetweenTries": 5000,
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -969,106 +616,27 @@
     },
     {
       "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "AI Draft": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('AI_Draft', ``, 'string') }}",
-            "Record ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Record_ID', ``, 'string') }}",
-            "Inquiry": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Inquiry', ``, 'string') }}",
-            "EscalateStatus": "wait",
-            "Status": "Under review"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "Record ID",
-              "displayName": "Record ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "Inquiry",
-              "displayName": "Inquiry",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "AI Draft",
-              "displayName": "AI Draft",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "Status",
-              "displayName": "Status",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "check",
-              "displayName": "check",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "EscalateStatus",
-              "displayName": "EscalateStatus",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: ($json['Record ID'] || $json['Record Id'] || $json.record_id), inquiry: ($json.Inquiry || $json.inquiry), ai_draft: ($json['AI Draft'] || $json.ai_draft), status: 'Under review', created_at: new Date().toISOString() }) }}"
       },
-      "type": "n8n-nodes-base.googleSheetsTool",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -48,
         -144
       ],
       "id": "c242acf3-efd1-426f-b99e-b4f4746d2265",
-      "name": "Append row in sheet in Google Sheets",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
+      "name": "Create Task From AI (VA)"
     },
     {
       "parameters": {
@@ -1117,16 +685,16 @@
         "values": {
           "string": [
             {
-              "name": "DUMMY_DB_URI",
-              "value": "={{ $env.DUMMY_DB_URI || 'mock://db' }}"
-            },
-            {
-              "name": "DUMMY_API_BASE",
-              "value": "={{ $env.DUMMY_API_BASE || 'https://example.local' }}"
-            },
-            {
               "name": "N8N_BASE_URL",
-              "value": "={{ $env.N8N_BASE_URL || 'https://example.local' }}"
+              "value": "={{ $env.N8N_BASE_URL || 'https://dummy-n8n.example.com' }}"
+            },
+            {
+              "name": "VA_API_BASE_URL",
+              "value": "={{ $env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api' }}"
+            },
+            {
+              "name": "VA_API_KEY",
+              "value": "={{ $env.VA_API_KEY || 'your_va_api_key_here' }}"
             },
             {
               "name": "RATE_LIMIT_MINUTES",
@@ -1170,6 +738,43 @@
       ],
       "id": "2f9d3b2a-2d7a-4d25-8c5d-1c3a5f5b6c72",
       "name": "Run Tracker"
+    },
+    {
+      "parameters": {
+        "jsCode": "const it = $input.first().json || {}; const ai = (it.choices && it.choices[0] && it.choices[0].message && it.choices[0].message.content) || {}; const recordId = it['Record Id'] || it['Record ID'] || it.record_id || ai.Record_ID || ai.record_id || 'unknown'; const inquiry = it.Inquiry || ai.Inquiry || it.inquiry || ''; const aiDraft = ai.AI_Draft || it['AI Draft'] || it.ai_draft || ''; $json.record_id = recordId; $json.inquiry = inquiry; $json.ai_draft = aiDraft; $json.status = 'under_review'; $json['Record ID'] = recordId; $json['Inquiry'] = inquiry; $json['AI Draft'] = aiDraft; $json.taskPayload = { record_id: recordId, inquiry, ai_draft: aiDraft, status: 'under_review', created_at: new Date().toISOString() }; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        -144
+      ],
+      "id": "va-build-task",
+      "name": "Build Task Payload"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') }}/tasks",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || $json.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify($json.taskPayload || { record_id: $json.record_id, inquiry: $json.inquiry, ai_draft: $json.ai_draft, status: 'under_review', created_at: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -16,
+        -144
+      ],
+      "id": "va-create-task",
+      "name": "Create Task (VA)"
     },
     {
       "parameters": {
@@ -1249,8 +854,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -320,
-        -80
+        -480,
+        1264
       ],
       "id": "w5-build",
       "name": "Build Dummy Notification"
@@ -1268,8 +873,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -80,
-        -80
+        -240,
+        1264
       ],
       "id": "w5-send",
       "name": "Send Dummy Broadcast"
@@ -1287,8 +892,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        160,
-        -80
+        0,
+        1264
       ],
       "id": "w5-log",
       "name": "Hidden Hook: Log broadcast_type"
@@ -1307,7 +912,7 @@
       "typeVersion": 1,
       "position": [
         -720,
-        40
+        1440
       ],
       "id": "w6-cron",
       "name": "Poll Every Minute"
@@ -1325,7 +930,7 @@
       "typeVersion": 4.1,
       "position": [
         -480,
-        40
+        1440
       ],
       "id": "w6-fetch",
       "name": "Fetch Dummy Inbox"
@@ -1338,47 +943,34 @@
       "typeVersion": 2,
       "position": [
         -240,
-        40
+        1440
       ],
       "id": "w6-map",
       "name": "Normalize Responses"
     },
     {
       "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "dummy-doc",
-          "mode": "list",
-          "cachedResultName": "Dummy DB"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/notifications' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 111111,
-          "mode": "list",
-          "cachedResultName": "holding_responses"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "record_id": "={{ $json.record_id }}",
-            "response_text": "={{ $json.response_text }}",
-            "response_tier": "={{ $json.response_tier }}",
-            "received_at": "={{ $json.received_at }}"
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ task_id: $json.record_id, type: 'response', message: $json.response_text, response_tier: $json.response_tier, status: 'received', created_at: $json.received_at }) }}"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         0,
-        40
+        1440
       ],
       "id": "w6-store",
-      "name": "Store to Holding Table"
+      "name": "Store Response (VA)"
     },
     {
       "parameters": {
@@ -1394,7 +986,7 @@
       "typeVersion": 4.1,
       "position": [
         240,
-        40
+        1440
       ],
       "id": "w6-log",
       "name": "Hidden Hook: Log response_tier"
@@ -1415,7 +1007,7 @@
       "typeVersion": 1,
       "position": [
         -720,
-        -40
+        1616
       ],
       "id": "w7-cron",
       "name": "Daily Check"
@@ -1428,7 +1020,7 @@
       "typeVersion": 2,
       "position": [
         -480,
-        -40
+        1616
       ],
       "id": "w7-build",
       "name": "Build Nudge with Token"
@@ -1447,7 +1039,7 @@
       "typeVersion": 4.1,
       "position": [
         -240,
-        -40
+        1616
       ],
       "id": "w7-send",
       "name": "Send Dummy Nudge"
@@ -1466,7 +1058,7 @@
       "typeVersion": 4.1,
       "position": [
         0,
-        -40
+        1616
       ],
       "id": "w7-log",
       "name": "Hidden Hook: Log token support"
@@ -1480,7 +1072,7 @@
       "typeVersion": 2.1,
       "position": [
         -720,
-        120
+        1792
       ],
       "id": "w8-hook",
       "name": "Webhook: Receive Transition"
@@ -1493,47 +1085,34 @@
       "typeVersion": 2,
       "position": [
         -480,
-        120
+        1792
       ],
       "id": "w8-score",
       "name": "Compute Latency Score"
     },
     {
       "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "dummy-doc",
-          "mode": "list",
-          "cachedResultName": "Dummy DB"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/audit' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 222222,
-          "mode": "list",
-          "cachedResultName": "unified_logs"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "record_id": "={{ $json.record_id }}",
-            "transition": "={{ $json.transition }}",
-            "timestamp": "={{ $json.timestamp }}",
-            "latency_score": "={{ $json.latency_score }}"
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, transition: $json.transition, timestamp: $json.timestamp, latency_score: $json.latency_score, broadcast_type: ($json.broadcast_type||'') }) }}"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         -240,
-        120
+        1792
       ],
       "id": "w8-store",
-      "name": "Store Unified Log"
+      "name": "Store Unified Log (VA)"
     },
     {
       "parameters": {
@@ -1544,23 +1123,42 @@
       "typeVersion": 2.1,
       "position": [
         -720,
-        280
+        1968
       ],
       "id": "w9-hook",
       "name": "Webhook: Draft to Restyle"
     },
     {
       "parameters": {
-        "jsCode": "const draft = $json.draft || 'This is a sample draft response.';\\n$json.prompt = `Restyle politely and concisely: ${draft}`;\\nreturn $json;"
+        "jsCode": "const draft = $json.draft || 'This is a sample draft response.';\\n$json.prompt = `Restyle the following politely and concisely. Respond ONLY with JSON: {\\\"draft_alt\\\": \\\"<text>\\\"}. No extra text.\\n\\nInput:\\n${draft}`;\\nreturn $json;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
-        280
+        -480,
+        1968
       ],
       "id": "w9-build-prompt",
       "name": "Build Restyle Prompt"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.airtableRecordId || $json.record_id || 'unknown', transition: ($json.decision || $json.Status || 'unknown'), normalized_transition: (($json.decision || $json.Status || '').toString().toLowerCase() === 'approve' ? 'approved' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'edit' ? 'edited' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'reject' ? 'rejected' : ($json.decision || $json.Status || '').toString().toLowerCase())))), timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -56,
+        336
+      ],
+      "id": "log-decision",
+      "name": "Log Decision"
     },
     {
       "parameters": {
@@ -1584,8 +1182,8 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        -320,
-        280
+        -240,
+        1968
       ],
       "id": "w9-ai",
       "name": "Restyle with AI",
@@ -1598,53 +1196,121 @@
     },
     {
       "parameters": {
-        "jsCode": "const recId = $json.record_id || '12345';\\nconst content = ($json?.choices?.[0]?.message?.content?.draft_alt) || 'Restyled draft version here.';\\n$json.rewriter_output = { record_id: recId, draft_alt: content, priority: true, created_at: new Date().toISOString() };\\nreturn $json;"
+        "jsCode": "const recId = $json.record_id || '12345';\nconst content = ($json?.choices?.[0]?.message?.content?.draft_alt) || 'Restyled draft version here.';\n$json.rewriter_output = { record_id: recId, draft_alt: content, priority: true, created_at: new Date().toISOString() };\nreturn $json;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -120,
-        280
+        0,
+        1968
       ],
       "id": "w9-shape",
       "name": "Shape Output"
     },
     {
       "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "dummy-doc",
-          "mode": "list",
-          "cachedResultName": "Dummy DB"
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/drafts' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
         },
-        "sheetName": {
-          "__rl": true,
-          "value": 333333,
-          "mode": "list",
-          "cachedResultName": "alt_drafts"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "record_id": "={{ ($json.rewriter_output||{}).record_id }}",
-            "draft_alt": "={{ ($json.rewriter_output||{}).draft_alt }}",
-            "priority": "={{ ($json.rewriter_output||{}).priority }}",
-            "created_at": "={{ ($json.rewriter_output||{}).created_at }}"
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ task_id: ($json.rewriter_output||{}).record_id || $json.record_id, content: ($json.rewriter_output||{}).draft_alt, priority: ($json.rewriter_output||{}).priority, created_at: ($json.rewriter_output||{}).created_at }) }}"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
-        80,
-        280
+        240,
+        1968
       ],
       "id": "w9-store",
-      "name": "Save Alt Draft"
+      "name": "Save Alt Draft (VA)"
+    }
+    ,
+    {
+      "parameters": {
+        "content": "## Workflow 5\nBroadcast notification via webhook; send dummy email; log meta",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1216
+      ],
+      "id": "w5-note",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 6\nListener: poll inbox, normalize and store responses; log tier",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1392
+      ],
+      "id": "w6-note",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 7\nDaily nudge with token; send and log",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1568
+      ],
+      "id": "w7-note",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 8\nReceive transition; compute latency; store unified log",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1744
+      ],
+      "id": "w8-note",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 9\nRestyle draft via AI; save alt draft to VA",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1920
+      ],
+      "id": "w9-note",
+      "name": "Sticky Note9"
     }
   ],
   "pinData": {
@@ -1776,6 +1442,28 @@
       "main": [
         [
           {
+            "node": "va-build-task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "va-build-task": {
+      "main": [
+        [
+          {
+            "node": "va-create-task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "va-create-task": {
+      "main": [
+        [
+          {
             "node": "AI Draft",
             "type": "main",
             "index": 0
@@ -1855,8 +1543,18 @@
             "node": "escalate",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Log Decision",
+            "type": "main",
+            "index": 1
           }
         ]
+      ]
+    },
+    "Log Decision": {
+      "main": [
+        []
       ]
     },
     "reFetch Data": {

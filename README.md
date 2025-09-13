@@ -52,14 +52,151 @@
   - Run tracking: internal per-workflow global store (`Run Tracker`) logs each run start (for debugging).
   - Env vars: all dummy endpoints respect `N8N_BASE_URL` and `DUMMY_API_BASE` so you can point at mocks.
 
-- Screenshots checklist:
-  - Draft creation runs (AI Draft row in sheet).
-  - Notifications sent (content review/escalation Slack nodes executed).
-  - Escalations logged (reFetch/in progress nodes run).
-  - Completion cycle works (Completed trigger → internal team → sent → Meta Logger → Broadcaster).
-  - Nudges fire after inactivity (Smart Responder log).
-  - Responses saved by Listener (holding table rows).
-  - Logger shows latency (unified_logs with `latency_score`).
-  - Broadcaster and Rewriter produce dummy outputs (w5 and w9 runs).
+
+## Sandy Phantom Project – VA Dashboard Integration
+
+This n8n workflow set replaces Google Sheets with the Staff/VA Dashboard API as the system of record.
+
+### Environment Variables
+Add these in n8n (Settings → Variables) or a local .env for reference:
+
+- N8N_BASE_URL: Public base URL of your n8n instance (e.g., https://dummy-n8n.example.com)
+- VA_API_BASE_URL: Base URL of VA Dashboard backend API (e.g., https://dummy-va-api.example.com/api)
+- VA_API_KEY: Bearer token for VA API
+- RATE_LIMIT_MINUTES: Duplicate-drop window (default 5)
+
+Example: see .env.example in this folder.
+
+### Webhook Entry Points
+- /webhook/incoming → Intake (record_id, inquiry)
+- /webhook/review → Review actions (approve|edit|reject|escalate)
+- /webhook/w5-broadcast → Broadcast events logging/forwarding
+- /webhook/w8-meta-log → Unified audit/meta logging
+- /webhook/w9-rewrite → Draft restyling
+
+All webhooks write to the VA Dashboard via HTTP nodes using Authorization: Bearer VA_API_KEY.
+
+### VA API Endpoints Used
+- POST ${VA_API_BASE_URL}/tasks → Create task/intake and escalations
+- PATCH ${VA_API_BASE_URL}/tasks/:id → Update task status
+- GET ${VA_API_BASE_URL}/tasks → Retrieve tasks (used for under_review and escalations fetch)
+- POST ${VA_API_BASE_URL}/notifications → Record listener responses and nudges
+- POST ${VA_API_BASE_URL}/audit → Unified audit log entries (meta logger, broadcast logs, etc.)
+- POST ${VA_API_BASE_URL}/drafts → Save AI restyled alternate drafts (priority supported)
+
+### Workflow Mapping (n8n → VA API)
+1) Intake & Draft Generation
+- Trigger: POST /webhook/incoming with { record_id, inquiry }
+- Creates task: POST /tasks { record_id, inquiry, ai_draft?, status: under_review }
+- Review notification: Slack (content-review channel) with action links
+
+2) Review & Decision
+- Trigger: GET /webhook/review?record_id=...&decision=approve|edit|reject|escalate
+- Updates: PATCH /tasks/:id { status }
+- Logs decision: POST /webhook/w8-meta-log → POST /api/audit
+
+3) Escalation Routing
+- On decision=escalate, creates/reroutes: POST /tasks { record_id, status: in progress }
+- Notifies escalation channel on Slack
+
+4) Completion Cycle
+- Mark task completed in VA Dashboard (or via PATCH /tasks/:id)
+- Workflow posts audit and optionally calls broadcaster
+
+5) Broadcaster
+- Trigger: POST /webhook/w5-broadcast { record_id, broadcast_type }
+- Logs broadcast to /api/audit
+
+6) Listener (Responses)
+- Poll-based dummy inbox is supported for testing; normalized responses are saved to /api/notifications
+- Hidden hook logs response_tier to /api/audit via /webhook/w8-meta-log
+
+7) Smart Responder
+- Daily cron can generate a nudge payload; send via dummy endpoint (testing) and log token_supported via /webhook/w8-meta-log → /api/audit
+
+8) Meta Logger
+- /webhook/w8-meta-log computes latency_score and appends a unified audit entry at /api/audit
+
+9) Draft Rewriter
+- /webhook/w9-rewrite builds a restyle prompt, calls AI, shapes priority draft, and saves via POST /api/drafts { task_id, content, priority }
+
+### Safeguards
+- Rate limiting: duplicates within RATE_LIMIT_MINUTES are dropped by a dedupe code node
+- Error workflow: configured; ensure Slack/email alerting as needed in your n8n instance
+- Payload consistency: standardized on record_id (lowercase) across nodes
+- Hidden hooks to audit: broadcast_type, response_tier, token_supported, latency_score, priority flag
+
+### End-to-End Testing (curl)
+Export or set:
+- export N8N_BASE_URL="https://dummy-n8n.example.com"
+
+1) Draft Intake → /tasks
+```bash
+curl -X POST "$N8N_BASE_URL/webhook/incoming" \
+  -H "Content-Type: application/json" \
+  -d '{"record_id":"12345","inquiry":"Need help automating financial reports"}'
+```
+Verify in VA Dashboard (GET /api/tasks) that task 12345 exists with status under_review.
+
+2) Review Decision → /review (approve)
+```bash
+curl "$N8N_BASE_URL/webhook/review?record_id=12345&decision=approve"
+```
+Verify task status updated to approved in /api/tasks.
+
+3) Escalation Flow → /review (escalate)
+```bash
+curl "$N8N_BASE_URL/webhook/review?record_id=12345&decision=escalate"
+```
+Verify escalation visible in /api/tasks and Slack escalation notification.
+
+4) Completion Cycle
+Mark the task completed in the Staff Dashboard UI or via VA API directly:
+```bash
+curl -X PATCH "${VA_API_BASE_URL}/tasks/12345" \
+  -H "Authorization: Bearer $VA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"status":"completed"}'
+```
+Confirm entry appears in /api/audit (via Meta Logger calls).
+
+5) Broadcaster
+```bash
+curl -X POST "$N8N_BASE_URL/webhook/w5-broadcast" \
+  -H "Content-Type: application/json" \
+  -d '{"record_id":"12345","broadcast_type":"dummy_email"}'
+```
+Verify broadcast logged in /api/audit.
+
+6) Listener (Response)
+If using the dummy inbox, run the "Poll Every Minute" workflow or execute it manually in n8n to fetch a response; it will store to /api/notifications. Alternatively, POST directly to VA API to simulate a response:
+```bash
+curl -X POST "${VA_API_BASE_URL}/notifications" \
+  -H "Authorization: Bearer $VA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"task_id":"12345","type":"response","message":"Got it, thanks.","response_tier":"standard","status":"received"}'
+```
+
+7) Smart Responder (Cron)
+Manually run the daily cron in n8n to emit a nudge; confirm it appears in /api/notifications and audit includes token_supported.
+
+8) Meta Logger
+```bash
+curl -X POST "$N8N_BASE_URL/webhook/w8-meta-log" \
+  -H "Content-Type: application/json" \
+  -d '{"record_id":"12345","transition":"created","timestamp":"2025-09-13T12:00:00Z","latency_score":2}'
+```
+Verify entry in /api/audit.
+
+9) Draft Rewriter
+```bash
+curl -X POST "$N8N_BASE_URL/webhook/w9-rewrite" \
+  -H "Content-Type: application/json" \
+  -d '{"record_id":"12345","draft":"This is a sample draft response."}'
+```
+Verify alt draft saved in /api/drafts with priority=true.
+
+### Notes
+- All outgoing VA API HTTP requests include Authorization: Bearer VA_API_KEY and use JSON bodies.
+- Dates are ISO 8601 UTC strings.
+- Use the VA Dashboard UI or API to verify /tasks, /notifications, /audit, and /drafts results.
 
 
