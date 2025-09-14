@@ -203,3 +203,54 @@ Verify alt draft saved in /api/drafts with priority=true.
 - Use the VA Dashboard UI or API to verify /tasks, /notifications, /audit, and /drafts results.
 
 
+## VA Dashboard Integration Task Sheet
+
+### Env Vars
+```bash
+N8N_BASE_URL=https://dummy-n8n.example.com
+VA_API_BASE_URL=https://dummy-va-api.example.com/api
+VA_API_KEY=xxxx
+RATE_LIMIT_MINUTES=5
+SLACK_ESCALATIONS_CHANNEL=xxx
+SLACK_CONTENT_REVIEW_CHANNEL=xxx
+SLACK_INTERNAL_TEAM_CHANNEL=xxx
+```
+
+### Webhooks
+- /webhook/incoming → Task intake + AI draft
+- /webhook/review → Decision: approve | edit | reject | escalate
+- /webhook/w5-broadcast → Broadcast logs
+- /webhook/w8-meta-log → Unified audit logging
+- /webhook/w9-rewrite → AI draft restyle
+
+All webhook nodes call VA Dashboard API with Authorization: Bearer VA_API_KEY.
+
+### VA API Mapping
+- POST /tasks → Intake {record_id, inquiry, ai_draft?, status}
+- PATCH /tasks/:id → Status updates (approved, escalated, completed)
+- GET /tasks → Fetch under_review / escalated
+- POST /notifications → Listener responses & nudges
+- POST /audit → Audit logs (task_created, reviewed, escalated, completed, broadcast_sent, listener_saved, nudge_sent, draft_alt_saved)
+- POST /drafts → Save AI restyled drafts {task_id, content, priority}
+
+### Workflow Coverage
+- Intake → Draft → POST /tasks (status under_review)
+- Review → Decision → PATCH /tasks/:id + POST /audit
+- Escalation → PATCH /tasks/:id (status escalated) + Slack escalation alert
+- Completion Cycle → PATCH /tasks/:id (completed) → POST /audit + Broadcast
+- Broadcaster → Logs to /audit
+- Listener → Saves responses to /notifications (+ audit response_tier)
+- Smart Responder → Daily nudge → /notifications (+ audit token_supported)
+- Meta Logger → Central audit (latency_score, transitions)
+- Draft Rewriter → AI restyle → POST /drafts (priority flag)
+
+### Safeguards
+- Rate-limit duplicates within RATE_LIMIT_MINUTES
+- Error workflow → confirm Slack/email alerts
+- Standardize payload key → always record_id
+- Hidden hooks audited: broadcast_type, response_tier, token_supported, latency_score, priority
+
+### Confirmations (Before merge)
+- Error Handling: Ensure the error workflow actually routes to Slack/email (not just logs silently). If not, wire a Slack node or a simple email node.
+- Auth & Security: VA_API_KEY must be stored securely (n8n credentials, not plaintext). Optional: enable basic rate-limit middleware on webhooks to prevent spam.
+- Testing Proof: Provide screenshots of all 9 workflows firing end-to-end against the VA Dashboard (not Google Sheets).

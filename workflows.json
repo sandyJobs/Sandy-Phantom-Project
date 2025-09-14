@@ -12,7 +12,7 @@
         "messages": {
           "values": [
             {
-              "content": "=Based on the following customer inquiry, write a helpful and professional response draft:\n\nCustomer Inquiry:\n{{ $json.Inquiry }}\n\nDraft Response: \n\nRecord ID: {{ $json[\"Record Id\"] }}\n\nInquiry: {{ $json.Inquiry }}\n\nPass the record id and inquiry as pat of the output, do not modify them.\n\nMake this concise and clear, not too wordy and not ambiguous."
+              "content": "=Based on the following customer inquiry, write a helpful and professional response draft:\n\nCustomer Inquiry:\n{{ $json.Inquiry }}\n\nDraft Response: \n\nRecord ID: {{ $json[\"Record Id\"] }}\n\nInquiry: {{ $json.Inquiry }}\n\nPass the record id and inquiry as part of the output, do not modify them.\n\nMake this concise and clear, not too wordy and not ambiguous."
             }
           ]
         },
@@ -966,6 +966,32 @@
     },
     {
       "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/notifications' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ task_id: ($json.nudge||{}).record_id, type: 'nudge', message: ($json.nudge||{}).message, nudge_type: ($json.nudge||{}).nudge_type, status: 'sent', token_supported: true, created_at: ($json.nudge||{}).sent_at }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -120,
+        1616
+      ],
+      "id": "w7-store",
+      "name": "Store Nudge (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
         "url": "={{ $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
@@ -1740,6 +1766,17 @@
       ]
     },
     "w7-send": {
+      "main": [
+        [
+          {
+            "node": "Store Nudge (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Nudge (VA)": {
       "main": [
         [
           {
