@@ -1,14 +1,14 @@
 ### Import and Testing Guide (All-in-one Workflow)
 
 - Ensure env vars are set in n8n (.env or UI):
-  - N8N_BASE_URL, DUMMY_API_BASE, DUMMY_DB_URI, RATE_LIMIT_MINUTES
+  - N8N_BASE_URL, RATE_LIMIT_MINUTES, VA_API_BASE_URL, VA_API_KEY, SLACK_ESCALATIONS_CHANNEL, SLACK_CONTENT_REVIEW_CHANNEL, SLACK_INTERNAL_TEAM_CHANNEL
 
 - Import JSONs:
   - Only `workflows.json` (contains Workflows 1–9 + utilities).
 
 - Enable the workflow and confirm the following webhook endpoints exist (under nodes):
   - Review decision: `/webhook/review`
-  - Incoming data: `/webhook/0e4309c1-b600-45d5-a2ca-b12968875b25`
+  - Incoming data: `/webhook/incoming`
   - Broadcaster: `/webhook/w5-broadcast`
   - Meta Logger: `/webhook/w8-meta-log`
   - Draft Rewriter: `/webhook/w9-rewrite`
@@ -16,17 +16,17 @@
 - Test flow end-to-end (dummy payloads):
   1) Trigger draft creation (Workflow 1) via Incoming Data webhook:
      ```bash
-     curl -X POST "$N8N_BASE_URL/webhook/0e4309c1-b600-45d5-a2ca-b12968875b25" \
+     curl -X POST "$N8N_BASE_URL/webhook/incoming" \
        -H "Content-Type: application/json" \
-       -d '{"Record Id": "12345", "Inquiry": "Lorem ipsum"}'
+       -d '{"record_id": "12345", "inquiry": "Lorem ipsum"}'
      ```
-  2) Confirm AI Draft row appended (Status: Under review) in placeholder sheet.
+  2) Confirm task created in VA Dashboard (/tasks) with status under_review.
   3) Review links (Workflow 2) → use browser or curl to simulate decisions, e.g. escalate:
      ```bash
      curl "$N8N_BASE_URL/webhook/review?record_id=12345&decision=escalate"
      ```
   4) Escalation (Workflow 3) → verify dummy pool append + (abstract) Slack node executed.
-  5) Completion (Workflow 4) → when the “Escalated task” sheet row becomes completed, the Completed trigger fires. After 3 minutes, internal notification runs, then `sent` → logs “completed” to Meta Logger and calls Broadcaster.
+  5) Completion (Workflow 4) → when the task is marked completed in the VA Dashboard (PATCH /tasks/:id), after 3 minutes internal notification runs, then `sent` → logs task_completed and calls Broadcaster.
   6) Broadcaster (Workflow 5) → can be invoked directly for testing:
      ```bash
      curl -X POST "$N8N_BASE_URL/webhook/w5-broadcast" -H "Content-Type: application/json" \
@@ -64,6 +64,9 @@ Add these in n8n (Settings → Variables) or a local .env for reference:
 - VA_API_BASE_URL: Base URL of VA Dashboard backend API (e.g., https://dummy-va-api.example.com/api)
 - VA_API_KEY: Bearer token for VA API
 - RATE_LIMIT_MINUTES: Duplicate-drop window (default 5)
+- SLACK_ESCALATIONS_CHANNEL: Slack channel ID for escalations
+- SLACK_CONTENT_REVIEW_CHANNEL: Slack channel ID for content review
+- SLACK_INTERNAL_TEAM_CHANNEL: Slack channel ID for internal team notifications
 
 Example: see .env.example in this folder.
 
@@ -96,7 +99,7 @@ All webhooks write to the VA Dashboard via HTTP nodes using Authorization: Beare
 - Logs decision: POST /webhook/w8-meta-log → POST /api/audit
 
 3) Escalation Routing
-- On decision=escalate, creates/reroutes: POST /tasks { record_id, status: in progress }
+- On decision=escalate, creates/reroutes: POST /tasks { record_id, status: escalated }
 - Notifies escalation channel on Slack
 
 4) Completion Cycle
@@ -115,7 +118,7 @@ All webhooks write to the VA Dashboard via HTTP nodes using Authorization: Beare
 - Daily cron can generate a nudge payload; send via dummy endpoint (testing) and log token_supported via /webhook/w8-meta-log → /api/audit
 
 8) Meta Logger
-- /webhook/w8-meta-log computes latency_score and appends a unified audit entry at /api/audit
+- /webhook/w8-meta-log computes latency_score and appends a unified audit entry at /api/audit with action naming (task_created, task_reviewed, task_escalated, task_completed, broadcast_sent, listener_saved, nudge_sent, draft_alt_saved)
 
 9) Draft Rewriter
 - /webhook/w9-rewrite builds a restyle prompt, calls AI, shapes priority draft, and saves via POST /api/drafts { task_id, content, priority }
@@ -182,7 +185,7 @@ Manually run the daily cron in n8n to emit a nudge; confirm it appears in /api/n
 ```bash
 curl -X POST "$N8N_BASE_URL/webhook/w8-meta-log" \
   -H "Content-Type: application/json" \
-  -d '{"record_id":"12345","transition":"created","timestamp":"2025-09-13T12:00:00Z","latency_score":2}'
+  -d '{"record_id":"12345","action":"task_created","timestamp":"2025-09-13T12:00:00Z","latency_score":2}'
 ```
 Verify entry in /api/audit.
 

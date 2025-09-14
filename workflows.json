@@ -86,12 +86,7 @@
       "parameters": {
         "authentication": "oAuth2",
         "select": "channel",
-        "channelId": {
-          "__rl": true,
-          "value": "C09DKRUGFT7",
-          "mode": "list",
-          "cachedResultName": "internal-team"
-        },
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || $json.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
         "text": "=An escalated task has been completed for record ID: {{ $json['Record ID'] }}",
         "otherOptions": {
           "includeLinkToWorkflow": false
@@ -119,12 +114,7 @@
       "parameters": {
         "authentication": "oAuth2",
         "select": "channel",
-        "channelId": {
-          "__rl": true,
-          "value": "C09EFJXPMCG",
-          "mode": "list",
-          "cachedResultName": "escalations"
-        },
+        "channelId": "={{ $env.SLACK_ESCALATIONS_CHANNEL || $json.SLACK_ESCALATIONS_CHANNEL || 'C0000000000' }}",
         "text": "=A new inquiry has been escalated and requires expert review.\n\nRecord ID: {{ $json.record_id || $json['Record ID'] }}\nStatus: {{ ($json.status || $json.Status) || 'escalated' }}",
         "otherOptions": {
           "includeLinkToWorkflow": false
@@ -152,12 +142,7 @@
       "parameters": {
         "authentication": "oAuth2",
         "select": "channel",
-        "channelId": {
-          "__rl": true,
-          "value": "C09DPDE9YMC",
-          "mode": "list",
-          "cachedResultName": "content-review"
-        },
+        "channelId": "={{ $env.SLACK_CONTENT_REVIEW_CHANNEL || $json.SLACK_CONTENT_REVIEW_CHANNEL || 'C0000000000' }}",
         "text": "={{ $json.slackMessage }}",
         "otherOptions": {
           "includeLinkToWorkflow": false
@@ -226,7 +211,7 @@
       ],
       "id": "aa7b8418-694a-4ab5-9fec-65d6836195fd",
       "name": "Wait",
-      "webhookId": "e8edc69f-50f5-4082-afcf-e61dd262e023"
+      "webhookId": "={{ $env.WEBHOOK_WAIT_ID || 'wait-' + Math.random().toString(36).slice(2) }}"
     },
     {
       "parameters": {
@@ -241,7 +226,7 @@
         "sendBody": true,
         "method": "PATCH",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ status: ($json.decision || $json.Status || '').toString().toLowerCase() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ status: ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'approve' ? 'approved' : ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'edit' ? 'edited' : ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'reject' ? 'rejected' : ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || $json.Status || '')+'' ).toLowerCase())))) }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -327,7 +312,7 @@
     },
     {
       "parameters": {
-        "content": "## Workflow 3\nIf record is marked as \"Escalated\":\n\n  * Add task into external service pool (e.g., Airtable or Google Sheets).\n  * Notify service pool (via email/Slack).",
+        "content": "## Workflow 3\nIf record is marked as \"Escalated\":\n\n  * Add task into Staff/VA Dashboard (/tasks) with status \"escalated\".\n  * Notify escalation channel (via Slack).",
         "height": 208,
         "width": 1808,
         "color": 3
@@ -343,7 +328,7 @@
     },
     {
       "parameters": {
-        "content": "## Workflow 4\nWhen service pool marks task as Completed:\n\n  * Update task status in mock DB.\n  * Notify internal team (email/Slack).\n",
+        "content": "## Workflow 4\nWhen service pool marks task as Completed:\n\n  * Update task status in Staff/VA Dashboard.\n  * Notify internal team (email/Slack).\n",
         "height": 416,
         "width": 2048,
         "color": 4
@@ -396,7 +381,7 @@
       ],
       "id": "af966ac5-5a67-4de4-88b6-fc4fa2e5af87",
       "name": "reviewDecision",
-      "webhookId": "0e4309c1-b600-45d5-a2ca-b12968875b25"
+      "webhookId": "={{ $env.WEBHOOK_REVIEW_ID || 'review-' + Math.random().toString(36).slice(2) }}"
     },
     {
       "parameters": {
@@ -530,7 +515,7 @@
       ],
       "id": "a5171cee-50d9-4452-8551-f2456860f358",
       "name": "incoming data",
-      "webhookId": "0e4309c1-b600-45d5-a2ca-b12968875b25"
+      "webhookId": "={{ $env.WEBHOOK_INCOMING_ID || 'incoming-' + Math.random().toString(36).slice(2) }}"
     },
     {
       "parameters": {
@@ -545,7 +530,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || $json['Record ID'], description: $json['AI Draft'] || $json.ai_draft || '', status: 'in progress', created_at: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || $json['Record ID'], description: $json['AI Draft'] || $json.ai_draft || '', status: 'escalated', created_at: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -559,45 +544,6 @@
       "waitBetweenTries": 5000
     },
     {
-      "parameters": {
-        "pollTimes": {
-          "item": [
-            {
-              "mode": "everyMinute"
-            }
-          ]
-        },
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": 236556661,
-          "mode": "list",
-          "cachedResultName": "Escalated task",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=236556661"
-        },
-        "event": "rowUpdate",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleSheetsTrigger",
-      "typeVersion": 1,
-      "position": [
-        -688,
-        928
-      ],
-      "id": "e7921899-ab87-44d3-8d76-922a0dfcb252",
-      "name": "Completed",
-      "credentials": {
-        "googleSheetsTriggerOAuth2Api": {
-          "id": "jQrt81NLI66Av46Q",
-          "name": "helloHussein"
-        }
-      }
     },
     {
       "parameters": {
@@ -612,7 +558,7 @@
       ],
       "id": "8763a345-2c3f-4d68-aa43-65f66de364fa",
       "name": "3 min",
-      "webhookId": "f3fb2e81-734f-405f-aad4-d25d2befb617"
+      "webhookId": "={{ $env.WEBHOOK_3MIN_ID || 'wait3m-' + Math.random().toString(36).slice(2) }}"
     },
     {
       "parameters": {
@@ -639,45 +585,6 @@
       "name": "Create Task From AI (VA)"
     },
     {
-      "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA",
-          "mode": "list",
-          "cachedResultName": "Sandy dummy test",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": 1384316354,
-          "mode": "list",
-          "cachedResultName": "phantom prjct",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YcSoxVMPI4HZsWIDcKFHJVmjp8DIqldzqcBB7I2AmvA/edit#gid=1384316354"
-        },
-        "filtersUI": {
-          "values": [
-            {
-              "lookupColumn": "Status",
-              "lookupValue": "Under review"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        192,
-        -144
-      ],
-      "id": "41e62908-f7db-4edd-93ac-6cf213be1d1a",
-      "name": "AI Draft",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "L7m2hR9BbGPt6BLX",
-          "name": "helloHussein"
-        }
-      }
     },
     {
       "parameters": {
@@ -699,6 +606,18 @@
             {
               "name": "RATE_LIMIT_MINUTES",
               "value": "={{ $env.RATE_LIMIT_MINUTES || '5' }}"
+            },
+            {
+              "name": "SLACK_ESCALATIONS_CHANNEL",
+              "value": "={{ $env.SLACK_ESCALATIONS_CHANNEL || 'C0000000000' }}"
+            },
+            {
+              "name": "SLACK_CONTENT_REVIEW_CHANNEL",
+              "value": "={{ $env.SLACK_CONTENT_REVIEW_CHANNEL || 'C0000000000' }}"
+            },
+            {
+              "name": "SLACK_INTERNAL_TEAM_CHANNEL",
+              "value": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}"
             }
           ]
         },
@@ -784,7 +703,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.record_id || '12345', transition: 'created', timestamp: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.record_id || '12345', action: 'task_created', timestamp: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -803,7 +722,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.record_id || '12345', transition: 'completed', timestamp: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.record_id || '12345', action: 'task_completed', timestamp: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -845,7 +764,8 @@
         -80
       ],
       "id": "w5-trigger",
-      "name": "Trigger: Broadcast Webhook"
+      "name": "Trigger: Broadcast Webhook",
+      "webhookId": "={{ $env.WEBHOOK_W5_BROADCAST_ID || 'w5-' + Math.random().toString(36).slice(2) }}"
     },
     {
       "parameters": {
@@ -887,7 +807,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', transition: 'broadcast_sent', timestamp: new Date().toISOString(), latency_score: 0, broadcast_type: ($json.broadcast_event||{}).broadcast_type }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', action: 'broadcast_sent', timestamp: new Date().toISOString(), latency_score: 0, broadcast_type: ($json.broadcast_event||{}).broadcast_type }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -980,7 +900,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, transition: 'listener_saved', timestamp: new Date().toISOString(), response_tier: $json.response_tier }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'listener_saved', timestamp: new Date().toISOString(), response_tier: $json.response_tier }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -1052,7 +972,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: ($json.nudge||{}).record_id, transition: 'nudge_sent', timestamp: new Date().toISOString(), token_supported: true }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: ($json.nudge||{}).record_id, action: 'nudge_sent', timestamp: new Date().toISOString(), token_supported: true }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -1075,7 +995,8 @@
         1792
       ],
       "id": "w8-hook",
-      "name": "Webhook: Receive Transition"
+      "name": "Webhook: Receive Transition",
+      "webhookId": "={{ $env.WEBHOOK_W8_META_ID || 'w8-' + Math.random().toString(36).slice(2) }}"
     },
     {
       "parameters": {
@@ -1103,7 +1024,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, transition: $json.transition, timestamp: $json.timestamp, latency_score: $json.latency_score, broadcast_type: ($json.broadcast_type||'') }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: $json.action || $json.transition, normalized_action: $json.normalized_action, timestamp: $json.timestamp, latency_score: $json.latency_score, broadcast_type: ($json.broadcast_type||'') }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -1126,7 +1047,8 @@
         1968
       ],
       "id": "w9-hook",
-      "name": "Webhook: Draft to Restyle"
+      "name": "Webhook: Draft to Restyle",
+      "webhookId": "={{ $env.WEBHOOK_W9_REWRITE_ID || 'w9-' + Math.random().toString(36).slice(2) }}"
     },
     {
       "parameters": {
@@ -1149,7 +1071,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.airtableRecordId || $json.record_id || 'unknown', transition: ($json.decision || $json.Status || 'unknown'), normalized_transition: (($json.decision || $json.Status || '').toString().toLowerCase() === 'approve' ? 'approved' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'edit' ? 'edited' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'reject' ? 'rejected' : ($json.decision || $json.Status || '').toString().toLowerCase())))), timestamp: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.airtableRecordId || $json.record_id || 'unknown', action: 'task_reviewed', normalized_action: (($json.decision || $json.Status || '').toString().toLowerCase() === 'approve' ? 'approved' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'edit' ? 'edited' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'reject' ? 'rejected' : ($json.decision || $json.Status || '').toString().toLowerCase())))), timestamp: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -1230,6 +1152,25 @@
       ],
       "id": "w9-store",
       "name": "Save Alt Draft (VA)"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: ($json.rewriter_output||{}).record_id || $json.record_id || 'unknown', action: 'draft_alt_saved', timestamp: new Date().toISOString(), priority: ($json.rewriter_output||{}).priority === true }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        1968
+      ],
+      "id": "w9-log",
+      "name": "Log Draft Alt Saved"
     }
     ,
     {
@@ -1351,15 +1292,6 @@
         }
       }
     ],
-    "Completed": [
-      {
-        "json": {
-          "row_number": 3,
-          "Task Description": "Thank you for reaching out. We can help automate your lead generation and customer onboarding by integrating your sales CRM with your project management tool. Our solution can automatically create projects and assign tasks as soon as a deal is marked 'won' in your CRM, eliminating manual data entry and reducing delays. We'd be glad to discuss your specific systems and tailor our services to fit your workflow. Please let us know a convenient time for a detailed consultation.",
-          "Status": "completed"
-        }
-      }
-    ],
     "incoming data": [
       {
         "json": {
@@ -1411,19 +1343,6 @@
           "system_fingerprint": "fp_6d7dcc9a98"
         }
       }
-    ],
-    "AI Draft": [
-      {
-        "json": {
-          "row_number": 5,
-          "Record ID": "d2r5d8hn5",
-          "Inquiry": "We're looking to automate our financial reporting. Every week, my team manually pulls data from Stripe, our CRM, and bank statements to create a single report. We need a solution that automatically consolidates this data into a live dashboard to save time and reduce errors. Let us know how long this will take and what you will need from us or when can we book a meeting.",
-          "AI Draft": "Thank you for reaching out. We can help automate your financial reporting by integrating data from Stripe, your CRM, and bank statements into a live dashboard. To provide an accurate timeline, we'll need access details for these platforms and to understand your specific reporting requirements. Please let us know your availability for a meeting to discuss the next steps and implementation timeline.",
-          "Status": "Under review",
-          "check": "",
-          "EscalateStatus": "wait"
-        }
-      }
     ]
   },
   "connections": {
@@ -1456,6 +1375,11 @@
             "node": "va-create-task",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Log Created",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
@@ -1464,7 +1388,7 @@
       "main": [
         [
           {
-            "node": "AI Draft",
+            "node": "Wait",
             "type": "main",
             "index": 0
           }
@@ -1705,53 +1629,11 @@
         ]
       ]
     },
-    "Completed": {
-      "main": [
-        [
-          {
-            "node": "completed",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "3 min": {
       "main": [
         [
           {
             "node": "getId",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Append row in sheet in Google Sheets": {
-      "ai_tool": [
-        [
-          {
-            "node": "Message a model",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "Log Created",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AI Draft": {
-      "main": [
-        [
-          {
-            "node": "Wait",
             "type": "main",
             "index": 0
           }
@@ -1928,6 +1810,17 @@
         [
           {
             "node": "w9-store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w9-store": {
+      "main": [
+        [
+          {
+            "node": "w9-log",
             "type": "main",
             "index": 0
           }
