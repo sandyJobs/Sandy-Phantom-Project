@@ -430,6 +430,38 @@
     },
     {
       "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        1088
+      ],
+      "id": "w4-cron",
+      "name": "Cron: Check Completed"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = Array.isArray($json.items) ? $json.items : ($json.data || $json.tasks || []);\nconst list = Array.isArray(items) ? items : [];\nconst globalData = getWorkflowStaticData('global');\nif (!globalData.completed_notified) globalData.completed_notified = {};\nconst out = [];\nfor (const t of list) {\n  const id = String(t.record_id || t.id || t.task_id || '');\n  const status = String(t.status || '').toLowerCase();\n  if (!id) continue;\n  if (status === 'completed' && !globalData.completed_notified[id]) {\n    globalData.completed_notified[id] = true;\n    out.push({ json: { record_id: id, status: 'completed' } });\n  }\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        928
+      ],
+      "id": "w4-filter-completed",
+      "name": "Filter Completed"
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -564,8 +596,7 @@
       "retryOnFail": true,
       "waitBetweenTries": 5000
     },
-    {
-    },
+    
     {
       "parameters": {
         "amount": 3,
@@ -582,8 +613,7 @@
       "webhookId": "={{ $env.WEBHOOK_3MIN_ID || 'wait3m-' + Math.random().toString(36).slice(2) }}"
     },
     
-    {
-    },
+    
     {
       "parameters": {
         "keepOnlySet": false,
@@ -1437,6 +1467,11 @@
             "node": "Create Escalation (VA)",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Audit Escalation (VA)",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
