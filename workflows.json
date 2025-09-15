@@ -12,7 +12,7 @@
         "messages": {
           "values": [
             {
-              "content": "=Based on the following customer inquiry, write a helpful and professional response draft:\n\nCustomer Inquiry:\n{{ $json.Inquiry }}\n\nDraft Response: \n\nRecord ID: {{ $json[\"Record Id\"] }}\n\nInquiry: {{ $json.Inquiry }}\n\nPass the record id and inquiry as part of the output, do not modify them.\n\nMake this concise and clear, not too wordy and not ambiguous."
+              "content": "=Respond ONLY with JSON in this exact shape: {\\\"record_id\\\":\\\"<same as input>\\\",\\\"inquiry\\\":\\\"<same as input>\\\",\\\"ai_draft\\\":\\\"<draft>\\\"}. No extra text.\n\nInput:\nrecord_id: {{ $json.record_id }}\ninquiry: {{ $json.inquiry }}"
             }
           ]
         },
@@ -37,7 +37,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse decision webhook query and normalize fields\nconst queryData = $input.first().json.query;\nif (queryData && queryData.decision && queryData.record_id) {\n  const decision = (queryData.decision || '').toString();\n  const recordId = (queryData.record_id || '').toString();\n  return [{ json: {\n    decision,\n    Status: decision,\n    record_id: recordId,\n    airtableRecordId: recordId, // legacy compatibility\n    originalQuery: queryData\n  } }];\n} else {\n  console.log('Received Query Data:', JSON.stringify(queryData, null, 2));\n  throw new Error(\"Missing required parameters: 'decision' and 'record_id'.\");\n}"
+        "jsCode": "// Parse decision webhook query and normalize fields\nconst queryData = $input.first().json.query;\nif (queryData && queryData.decision && queryData.record_id) {\n  const decision = String(queryData.decision || '').toLowerCase();\n  const recordId = String(queryData.record_id || '');\n  return [{ json: {\n    decision,\n    status: decision,\n    record_id: recordId,\n    airtableRecordId: recordId,\n    originalQuery: queryData\n  } }];\n} else {\n  console.log('Received Query Data:', JSON.stringify(queryData, null, 2));\n  throw new Error(\"Missing required parameters: 'decision' and 'record_id'.\");\n}"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -60,7 +60,7 @@
           "conditions": [
             {
               "id": "26dc4441-f0af-4e25-ab96-635b8c4b0ce5",
-              "leftValue": "={{ $json.Status }}",
+              "leftValue": "={{ $json.decision }}",
               "rightValue": "escalate",
               "operator": {
                 "type": "string",
@@ -87,7 +87,7 @@
         "authentication": "oAuth2",
         "select": "channel",
         "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || $json.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
-        "text": "=An escalated task has been completed for record ID: {{ $json['Record ID'] }}",
+        "text": "=An escalated task has been completed for record ID: {{ $json.record_id }}",
         "otherOptions": {
           "includeLinkToWorkflow": false
         }
@@ -115,7 +115,7 @@
         "authentication": "oAuth2",
         "select": "channel",
         "channelId": "={{ $env.SLACK_ESCALATIONS_CHANNEL || $json.SLACK_ESCALATIONS_CHANNEL || 'C0000000000' }}",
-        "text": "=A new inquiry has been escalated and requires expert review.\n\nRecord ID: {{ $json.record_id || $json['Record ID'] }}\nStatus: {{ ($json.status || $json.Status) || 'escalated' }}",
+        "text": "=A new inquiry has been escalated and requires expert review.\n\nRecord ID: {{ $json.record_id }}\nStatus: {{ $json.status || 'escalated' }}",
         "otherOptions": {
           "includeLinkToWorkflow": false
         }
@@ -162,7 +162,28 @@
           "id": "1jSm8r6Tmacc60Wn",
           "name": "Slack account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || 'unknown', action: 'review_notified', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        256,
+        80
+      ],
+      "id": "log-review-notified",
+      "name": "Log Review Notified"
     },
     {
       "parameters": {
@@ -215,7 +236,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + ($json.record_id || $json['Record ID'] || $json.airtableRecordId) }}",
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + ($json.record_id || $json.airtableRecordId) }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -226,7 +247,7 @@
         "sendBody": true,
         "method": "PATCH",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ status: ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'approve' ? 'approved' : ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'edit' ? 'edited' : ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'reject' ? 'rejected' : ((($json.decision || $json.Status || '')+'' ).toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || $json.Status || '')+'' ).toLowerCase())))) }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ status: ((($json.decision || '')+'' ).toLowerCase() === 'approve' ? 'approved' : ((($json.decision || '')+'' ).toLowerCase() === 'edit' ? 'edited' : ((($json.decision || '')+'' ).toLowerCase() === 'reject' ? 'rejected' : ((($json.decision || '')+'' ).toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || '')+'' ).toLowerCase())))) }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -344,7 +365,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + ($json.record_id || $json['Record ID']) }}",
+        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + $json.record_id }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -355,7 +376,7 @@
         "sendBody": true,
         "method": "PATCH",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ status: $json.Status || 'completed' }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ status: $json.status || 'completed' }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -419,7 +440,7 @@
           "conditions": [
             {
               "id": "17ca0fb1-7886-4d9a-9d7d-ab3c759e9577",
-              "leftValue": "={{ $json.Status }}",
+              "leftValue": "={{ $json.status }}",
               "rightValue": "=completed",
               "operator": {
                 "type": "string",
@@ -474,7 +495,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ action: 'ESCALATION_SENT', event: 'Notification sent', meta: { record_id: $json['Record ID'] || $json.record_id }, created_at: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ action: 'ESCALATION_SENT', event: 'Notification sent', meta: { record_id: $json.record_id }, created_at: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -530,7 +551,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || $json['Record ID'], description: $json['AI Draft'] || $json.ai_draft || '', status: 'escalated', created_at: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, description: $json.ai_draft || '', status: 'escalated', created_at: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -560,30 +581,7 @@
       "name": "3 min",
       "webhookId": "={{ $env.WEBHOOK_3MIN_ID || 'wait3m-' + Math.random().toString(36).slice(2) }}"
     },
-    {
-      "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
-        "options": {
-          "headers": {
-            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
-            "Content-Type": "application/json"
-          }
-        },
-        "jsonParameters": true,
-        "sendBody": true,
-        "method": "POST",
-        "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: ($json['Record ID'] || $json['Record Id'] || $json.record_id), inquiry: ($json.Inquiry || $json.inquiry), ai_draft: ($json['AI Draft'] || $json.ai_draft), status: 'Under review', created_at: new Date().toISOString() }) }}"
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        -48,
-        -144
-      ],
-      "id": "c242acf3-efd1-426f-b99e-b4f4746d2265",
-      "name": "Create Task From AI (VA)"
-    },
+    
     {
     },
     {
@@ -647,7 +645,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\\nconst globalData = getWorkflowStaticData('global');\\nif (!globalData.run_tracking) globalData.run_tracking = [];\\nconst it = items[0]?.json || {};\\nconst recId = it['Record ID'] || it['Record Id'] || it.record_id || 'unknown';\\nglobalData.run_tracking.push({ timestamp: new Date().toISOString(), workflow: 'Workflow 1–4 Combined', record_id: recId, status: it.Status || 'received', note: 'run_start' });\\nreturn items;"
+        "jsCode": "const items = $input.all();\\nconst globalData = getWorkflowStaticData('global');\\nif (!globalData.run_tracking) globalData.run_tracking = [];\\nconst it = items[0]?.json || {};\\nconst recId = it.record_id || it['Record ID'] || it['Record Id'] || 'unknown';\\nglobalData.run_tracking.push({ timestamp: new Date().toISOString(), workflow: 'Workflow 1–4 Combined', record_id: recId, status: it.status || 'received', note: 'run_start' });\\nreturn items;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -660,7 +658,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const it = $input.first().json || {}; const ai = (it.choices && it.choices[0] && it.choices[0].message && it.choices[0].message.content) || {}; const recordId = it['Record Id'] || it['Record ID'] || it.record_id || ai.Record_ID || ai.record_id || 'unknown'; const inquiry = it.Inquiry || ai.Inquiry || it.inquiry || ''; const aiDraft = ai.AI_Draft || it['AI Draft'] || it.ai_draft || ''; $json.record_id = recordId; $json.inquiry = inquiry; $json.ai_draft = aiDraft; $json.status = 'under_review'; $json['Record ID'] = recordId; $json['Inquiry'] = inquiry; $json['AI Draft'] = aiDraft; $json.taskPayload = { record_id: recordId, inquiry, ai_draft: aiDraft, status: 'under_review', created_at: new Date().toISOString() }; return $json;"
+        "jsCode": "const it = $input.first().json || {}; const ai = (it.choices?.[0]?.message?.content) || {}; const recordId = it.record_id || it['Record Id'] || it['Record ID'] || ai.record_id || ai.Record_ID || 'unknown'; const inquiry = it.inquiry || it.Inquiry || ai.inquiry || ''; const aiDraft = it.ai_draft || it['AI Draft'] || ai.ai_draft || ''; $json.record_id = recordId; $json.inquiry = inquiry; $json.ai_draft = aiDraft; $json.status = 'under_review'; $json.taskPayload = { record_id: recordId, inquiry, ai_draft: aiDraft, status: 'under_review', created_at: new Date().toISOString() }; return $json;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -703,7 +701,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.record_id || '12345', action: 'task_created', timestamp: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', action: 'task_created', timestamp: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -722,7 +720,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.record_id || '12345', action: 'task_completed', timestamp: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', action: 'task_completed', timestamp: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -741,7 +739,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.record_id || '12345', broadcast_type: 'dummy_email', sent_at: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', broadcast_type: 'dummy_email', sent_at: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -1097,7 +1095,7 @@
         "sendBody": true,
         "method": "POST",
         "authentication": "none",
-        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json['Record ID'] || $json['Record Id'] || $json.airtableRecordId || $json.record_id || 'unknown', action: 'task_reviewed', normalized_action: (($json.decision || $json.Status || '').toString().toLowerCase() === 'approve' ? 'approved' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'edit' ? 'edited' : (($json.decision || $json.Status || '').toString().toLowerCase() === 'reject' ? 'rejected' : ($json.decision || $json.Status || '').toString().toLowerCase())))), timestamp: new Date().toISOString() }) }}"
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || $json.airtableRecordId || 'unknown', action: 'task_reviewed', normalized_action: (($json.decision || '').toString().toLowerCase() === 'approve' ? 'approved' : (($json.decision || '').toString().toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || '').toString().toLowerCase() === 'edit' ? 'edited' : (($json.decision || '').toString().toLowerCase() === 'reject' ? 'rejected' : ($json.decision || '').toString().toLowerCase())))), timestamp: new Date().toISOString() }) }}"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -1425,7 +1423,7 @@
       "main": [
         [
           {
-            "node": "change status",
+            "node": "change status (VA)",
             "type": "main",
             "index": 0
           }
@@ -1436,7 +1434,7 @@
       "main": [
         [
           {
-            "node": "reFetch Data",
+            "node": "Create Escalation (VA)",
             "type": "main",
             "index": 0
           }
@@ -1472,21 +1470,27 @@
     },
     "content review": {
       "main": [
-        []
-      ]
-    },
-    "Wait": {
-      "main": [
         [
           {
-            "node": "status inReview",
+            "node": "Log Review Notified",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "change status": {
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "block format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "change status (VA)": {
       "main": [
         [
           {
@@ -1518,17 +1522,7 @@
         ]
       ]
     },
-    "completed": {
-      "main": [
-        [
-          {
-            "node": "3 min",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
+    
     "reviewDecision": {
       "main": [
         [
@@ -1540,17 +1534,7 @@
         ]
       ]
     },
-    "getId": {
-      "main": [
-        [
-          {
-            "node": "not sent",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
+    
     "not sent": {
       "main": [
         [
@@ -1563,6 +1547,11 @@
             "node": "Merge",
             "type": "main",
             "index": 1
+          },
+          {
+            "node": "Audit Escalation (VA)",
+            "type": "main",
+            "index": 2
           }
         ]
       ]
@@ -1578,17 +1567,7 @@
         ]
       ]
     },
-    "sent": {
-      "main": [
-        [
-          {
-            "node": "Log Completed",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
+    
     "Log Completed": {
       "main": [
         [
@@ -1604,7 +1583,7 @@
       "main": [
         [
           {
-            "node": "sent",
+            "node": "Log Completed",
             "type": "main",
             "index": 0
           }
@@ -1659,7 +1638,7 @@
       "main": [
         [
           {
-            "node": "getId",
+            "node": "not sent",
             "type": "main",
             "index": 0
           }
