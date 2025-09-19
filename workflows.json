@@ -28,10 +28,11 @@
       ],
       "id": "cbb75b5b-70c4-4a28-9b3c-ebcf1161e646",
       "name": "Message a model",
+      "continueOnFail": true,
       "credentials": {
         "openAiApi": {
-          "id": "lScFrx0RuQ95n3ud",
-          "name": "OpenAi account 2"
+          "id": "dummy",
+          "name": "Dummy"
         }
       }
     },
@@ -101,6 +102,7 @@
       "id": "bd975ccb-0201-4245-b5d5-8c71fa69e9ca",
       "name": "internal team",
       "webhookId": "a2e2ff58-a8df-4d9b-97ea-ce7dfd994f4d",
+      "continueOnFail": true,
       "retryOnFail": true,
       "waitBetweenTries": 5000,
       "credentials": {
@@ -129,6 +131,7 @@
       "id": "78351729-ca85-4af9-91bc-805449599c7f",
       "name": "escalation",
       "webhookId": "def3e998-d710-42d6-957c-c9318334bf0e",
+      "continueOnFail": true,
       "retryOnFail": true,
       "waitBetweenTries": 5000,
       "credentials": {
@@ -157,6 +160,7 @@
       "id": "c00df544-559d-4ed9-b100-04f56f21b62c",
       "name": "content review",
       "webhookId": "326c7b50-e57c-47de-827d-892dad1cf3d6",
+      "continueOnFail": true,
       "credentials": {
         "slackOAuth2Api": {
           "id": "1jSm8r6Tmacc60Wn",
@@ -168,7 +172,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -187,7 +191,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
@@ -236,7 +240,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + ($json.record_id || $json.airtableRecordId) }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks/' + ($json.record_id || $json.airtableRecordId) }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -262,7 +266,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
@@ -365,7 +369,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks/' + $json.record_id }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks/' + $json.record_id }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -406,7 +410,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
@@ -516,7 +520,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/audit' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/audit' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -572,7 +576,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/tasks' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -621,11 +625,11 @@
           "string": [
             {
               "name": "N8N_BASE_URL",
-              "value": "={{ $env.N8N_BASE_URL || 'https://dummy-n8n.example.com' }}"
+              "value": "={{ $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}"
             },
             {
               "name": "VA_API_BASE_URL",
-              "value": "={{ $env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api' }}"
+              "value": "={{ $env.VA_API_BASE_URL || 'https://httpbin.org/anything/api' }}"
             },
             {
               "name": "VA_API_KEY",
@@ -649,7 +653,7 @@
             },
             {
               "name": "EXTERNAL_PARTY_WEBHOOK_URL",
-              "value": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://example.local/dummy/external' }}"
+              "value": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://httpbin.org/anything/external' }}"
             },
             {
               "name": "ACK_TIMEOUT_HOURS",
@@ -657,7 +661,11 @@
             },
             {
               "name": "OPERATOR_EMAIL_API_URL",
-              "value": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://example.local') + '/dummy/email' }}"
+              "value": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://httpbin.org/anything') + '/dummy/email' }}"
+            },
+            {
+              "name": "DUMMY_API_BASE",
+              "value": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}"
             },
             {
               "name": "OPERATOR_SLACK_FALLBACK_CHANNEL",
@@ -704,7 +712,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const it = $input.first().json || {}; const ai = (it.choices?.[0]?.message?.content) || {}; const recordId = it.record_id || it['Record Id'] || it['Record ID'] || ai.record_id || ai.Record_ID || 'unknown'; const inquiry = it.inquiry || it.Inquiry || ai.inquiry || ''; const aiDraft = it.ai_draft || it['AI Draft'] || ai.ai_draft || ''; $json.record_id = recordId; $json.inquiry = inquiry; $json.ai_draft = aiDraft; $json.status = 'under_review'; $json.taskPayload = { record_id: recordId, inquiry, ai_draft: aiDraft, status: 'under_review', created_at: new Date().toISOString() }; return $json;"
+        "jsCode": "const it = $input.first().json || {};\nconst ai = (it.choices?.[0]?.message?.content) || {};\nconst recordId = it.record_id || it['Record Id'] || it['Record ID'] || ai.record_id || ai.Record_ID || 'unknown';\nconst inquiry = it.inquiry || it.Inquiry || ai.inquiry || ai.Inquiry || '';\nconst aiDraft = it.ai_draft || it['AI Draft'] || ai.ai_draft || ai.AI_Draft || '';\n$json.record_id = recordId;\n$json.inquiry = inquiry;\n$json.ai_draft = aiDraft;\n$json.status = 'under_review';\n$json.taskPayload = { record_id: recordId, inquiry, ai_draft: aiDraft, status: 'under_review', created_at: new Date().toISOString() };\nreturn $json;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -717,7 +725,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') }}/tasks",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') }}/tasks",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || $json.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -741,7 +749,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -760,7 +768,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -779,7 +787,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w5-broadcast",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w5-broadcast",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -826,7 +834,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.DUMMY_API_BASE || 'https://example.local' }}/dummy/email",
+        "url": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}/dummy/email",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -845,7 +853,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -883,7 +891,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.DUMMY_API_BASE || 'https://example.local' }}/dummy/inbox",
+        "url": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}/dummy/inbox",
         "options": {},
         "jsonParameters": true,
         "sendBody": false,
@@ -914,7 +922,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/notifications' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/notifications' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -938,7 +946,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -991,7 +999,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.DUMMY_API_BASE || 'https://example.local' }}/dummy/nudge",
+        "url": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}/dummy/nudge",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1010,7 +1018,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/notifications' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/notifications' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -1036,7 +1044,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1083,7 +1091,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/audit' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/audit' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -1135,7 +1143,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1179,6 +1187,7 @@
       ],
       "id": "w9-ai",
       "name": "Restyle with AI",
+      "continueOnFail": true,
       "credentials": {
         "openAiApi": {
           "id": "dummy",
@@ -1201,7 +1210,7 @@
     },
     {
       "parameters": {
-        "url": "={{ ($env.VA_API_BASE_URL || 'https://dummy-va-api.example.com/api') + '/drafts' }}",
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/drafts' }}",
         "options": {
           "headers": {
             "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
@@ -1225,7 +1234,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1353,6 +1362,7 @@
       ],
       "id": "error-alert-slack",
       "name": "Error Alert",
+      "continueOnFail": true,
       "credentials": {
         "slackOAuth2Api": {
           "id": "1jSm8r6Tmacc60Wn",
@@ -1364,7 +1374,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1495,6 +1505,7 @@
       ],
       "id": "notify-operator-slack",
       "name": "notify-operator-slack",
+      "continueOnFail": true,
       "credentials": {
         "slackOAuth2Api": {
           "id": "1jSm8r6Tmacc60Wn",
@@ -1506,7 +1517,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://example.local') + '/dummy/email' }}",
+        "url": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://httpbin.org/anything') + '/dummy/email' }}",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1525,7 +1536,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1582,6 +1593,7 @@
       ],
       "id": "w10-ai-pathway",
       "name": "w10-ai-pathway",
+      "continueOnFail": true,
       "credentials": {
         "openAiApi": {
           "id": "dummy",
@@ -1591,7 +1603,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const content = $json?.choices?.[0]?.message?.content; let pathway = {}; if (content && typeof content === 'object' && content.pathway) { pathway = content.pathway; } else if (content && typeof content === 'string') { try { const parsed = JSON.parse(content); pathway = parsed.pathway || parsed; } catch (e) { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } } else { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } const recordId = $json.record_id || 'unknown'; const base = $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local'; const token = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0,24); const ackUrl = `${base}/webhook/w10-ack?token=${encodeURIComponent(token)}`; const globalData = getWorkflowStaticData('global'); if (!globalData.ackTokens) globalData.ackTokens = {}; if (!globalData.ackReceived) globalData.ackReceived = {}; globalData.ackTokens[token] = recordId; if (globalData.ackReceived[recordId] !== true) globalData.ackReceived[recordId] = false; $json.pathway = pathway; $json.ack_token = token; $json.ack_url = ackUrl; $json.dispatchPayload = { record_id: recordId, pathway, ack_url: ackUrl, generated_at: new Date().toISOString() }; return $json;"
+        "jsCode": "const content = $json?.choices?.[0]?.message?.content; let pathway = {}; if (content && typeof content === 'object' && content.pathway) { pathway = content.pathway; } else if (content && typeof content === 'string') { try { const parsed = JSON.parse(content); pathway = parsed.pathway || parsed; } catch (e) { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } } else { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } const recordId = $json.record_id || 'unknown'; const base = $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything'; const token = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0,24); const ackUrl = `${base}/webhook/w10-ack?token=${encodeURIComponent(token)}`; const globalData = getWorkflowStaticData('global'); if (!globalData.ackTokens) globalData.ackTokens = {}; if (!globalData.ackReceived) globalData.ackReceived = {}; globalData.ackTokens[token] = recordId; if (globalData.ackReceived[recordId] !== true) globalData.ackReceived[recordId] = false; $json.pathway = pathway; $json.ack_token = token; $json.ack_url = ackUrl; $json.dispatchPayload = { record_id: recordId, pathway, ack_url: ackUrl, generated_at: new Date().toISOString() }; return $json;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1604,7 +1616,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://example.local/dummy/external' }}",
+        "url": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://httpbin.org/anything/external' }}",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1623,7 +1635,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1720,6 +1732,7 @@
       ],
       "id": "w10-escalate-missing",
       "name": "w10-escalate-missing",
+      "continueOnFail": true,
       "credentials": {
         "slackOAuth2Api": {
           "id": "1jSm8r6Tmacc60Wn",
@@ -1731,7 +1744,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1765,7 +1778,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const token = (($json.query||{}).token || '').toString(); const globalData = getWorkflowStaticData('global'); const map = globalData.ackTokens || {}; const recId = map[token]; if (recId) { if (!globalData.ackReceived) globalData.ackReceived = {}; globalData.ackReceived[recId] = true; $json.record_id = recId; $json.ack_status = 'valid'; } else { $json.record_id = 'unknown'; $json.ack_status = 'invalid'; } return $json;"
+        "jsCode": "const q = $json.query || {};\nconst token = (q.token || '').toString();\nconst test = (q.test || '').toString();\nconst testRecordId = (q.record_id || '').toString();\nconst globalData = getWorkflowStaticData('global');\nconst map = globalData.ackTokens || {};\nlet recId = map[token];\nif (!recId && test === '1' && testRecordId) {\n  recId = testRecordId;\n}\nif (recId) {\n  if (!globalData.ackReceived) globalData.ackReceived = {};\n  globalData.ackReceived[recId] = true;\n  $json.record_id = recId;\n  $json.ack_status = 'valid';\n} else {\n  $json.record_id = 'unknown';\n  $json.ack_status = 'invalid';\n}\nreturn $json;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1812,7 +1825,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1831,7 +1844,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
         "options": {},
         "jsonParameters": true,
         "sendBody": true,
@@ -1866,6 +1879,7 @@
       ],
       "id": "w10-escalate-invalid-ack",
       "name": "w10-escalate-invalid-ack",
+      "continueOnFail": true,
       "credentials": {
         "slackOAuth2Api": {
           "id": "1jSm8r6Tmacc60Wn",
@@ -1893,6 +1907,23 @@
       ],
       "id": "w10-log-invalid-ack",
       "name": "w10-log-invalid-ack"
+    }
+    ,
+    {
+      "parameters": {
+        "content": "## Workflow 10\nPathway generation, external dispatch, ACK + escalation",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        2096
+      ],
+      "id": "w10-note",
+      "name": "Sticky Note10"
     }
   ],
   "pinData": {
@@ -2234,6 +2265,39 @@
         [
           {
             "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w4-cron": {
+      "main": [
+        [
+          {
+            "node": "Fetch Completed (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Completed (VA)": {
+      "main": [
+        [
+          {
+            "node": "Filter Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Completed": {
+      "main": [
+        [
+          {
+            "node": "not sent",
             "type": "main",
             "index": 0
           }

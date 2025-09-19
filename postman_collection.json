@@ -42,6 +42,39 @@
       }
     },
     {
+      "name": "2b) Review decision webhook (approve|edit|reject|escalate)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/webhook/review?record_id=pm-002&decision=approve",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["webhook", "review"],
+          "query": [
+            {"key": "record_id", "value": "pm-002"},
+            {"key": "decision", "value": "approve"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "2c) Fetch last w10 ack_url (meta log)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/webhook/w8-meta-log",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["webhook", "w8-meta-log"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"pathway_dispatched\",\n  \"record_id\": \"pm-002\"\n}"
+        }
+      }
+    },
+    {
       "name": "3) Escalation trigger (missing ACK)",
       "event": [
         {
@@ -57,11 +90,18 @@
         }
       ],
       "request": {
-        "method": "GET",
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
         "url": {
           "raw": "{{N8N_BASE_URL}}/webhook/w8-meta-log",
           "host": ["{{N8N_BASE_URL}}"],
           "path": ["webhook", "w8-meta-log"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"ack_missing_escalated\",\n  \"record_id\": \"pm-002\"\n}"
         }
       }
     },
@@ -95,7 +135,7 @@
     }
   ],
   "variable": [
-    { "key": "N8N_BASE_URL", "value": "https://dummy-n8n.example.com" },
+    { "key": "N8N_BASE_URL", "value": "https://httpbin.org/anything" },
     { "key": "ACK_TOKEN", "value": "" }
   ]
 }

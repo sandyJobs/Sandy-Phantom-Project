@@ -1,7 +1,8 @@
-### Import and Testing Guide (All-in-one Workflow)
+### Import and Testing Guide (Workflows 1–10)
 
 - Ensure env vars are set in n8n (.env or UI):
-  - N8N_BASE_URL, RATE_LIMIT_MINUTES, VA_API_BASE_URL, VA_API_KEY, SLACK_ESCALATIONS_CHANNEL, SLACK_CONTENT_REVIEW_CHANNEL, SLACK_INTERNAL_TEAM_CHANNEL, EXTERNAL_PARTY_WEBHOOK_URL, ACK_TIMEOUT_HOURS, OPERATOR_EMAIL_API_URL, OPERATOR_SLACK_FALLBACK_CHANNEL
+  - N8N_BASE_URL, RATE_LIMIT_MINUTES, VA_API_BASE_URL, VA_API_KEY, SLACK_ESCALATIONS_CHANNEL, SLACK_CONTENT_REVIEW_CHANNEL, SLACK_INTERNAL_TEAM_CHANNEL, EXTERNAL_PARTY_WEBHOOK_URL, ACK_TIMEOUT_HOURS, OPERATOR_EMAIL_API_URL, OPERATOR_SLACK_FALLBACK_CHANNEL, DUMMY_API_BASE
+  - Note: Safe testing defaults are wired to https://httpbin.org/anything for external calls if you do not set these. For real logging back into this same n8n, set N8N_BASE_URL to your public n8n URL.
 
 - Import JSONs:
   - Only `workflows.json` (contains Workflows 1–10 + utilities).
@@ -13,7 +14,7 @@
   - Meta Logger: `/webhook/w8-meta-log`
   - Draft Rewriter: `/webhook/w9-rewrite`
   - Operator Assigned: `/webhook/operator-assigned`
-  - Pathway ACK: `/webhook/w10-ack`
+  - Pathway ACK: `/webhook/w10-ack` (also supports test mode: `?test=1&record_id=<id>`)
 
 - Test flow end-to-end (dummy payloads):
   1) Trigger draft creation (Workflow 1) via Incoming Data webhook:
@@ -52,10 +53,13 @@
 - Safeguards and Utilities:
   - Rate limiting: `RATE_LIMIT_MINUTES` prevents duplicate incoming records within the window (see `Rate Limit / Dedupe`).
   - Run tracking: internal per-workflow global store (`Run Tracker`) logs each run start (for debugging).
-  - Env vars: all dummy endpoints respect `N8N_BASE_URL` and `DUMMY_API_BASE` so you can point at mocks.
+  - Env vars: dummy endpoints use `DUMMY_API_BASE` (default https://httpbin.org/anything). Set `N8N_BASE_URL` to your public n8n if you want meta logs to loop back into this workflow.
 
 
-## Screenshots: All 9 Workflows Firing End-to-End
+## Screenshots: All 10 Workflows Firing End-to-End
+
+### 0) Operator Assignment (Utility)
+![Operator assigned and notified](./assets/00-operator-assign.png)
 
 ### 1) Intake (Workflow 1)
 ![Intake webhook executed successfully](./assets/01-intake.png)
@@ -84,6 +88,9 @@
 ### 9) Draft Rewriter (Workflow 9)
 ![Draft restyled by AI and alt saved with priority](./assets/09-draft-rewriter.png)
 
+### 10) Pathway + ACK (Workflow 10)
+![Pathway generated, dispatched, and ACK recorded/escalated](./assets/10-pathway-ack.png)
+
 Note: Place real execution screenshots at the above paths under `assets/`.
 
 
@@ -94,13 +101,18 @@ This n8n workflow set replaces Google Sheets with the Staff/VA Dashboard API as 
 ### Environment Variables
 Add these in n8n (Settings → Variables) or a local .env for reference:
 
-- N8N_BASE_URL: Public base URL of your n8n instance (e.g., https://dummy-n8n.example.com)
-- VA_API_BASE_URL: Base URL of VA Dashboard backend API (e.g., https://dummy-va-api.example.com/api)
+- N8N_BASE_URL: Public base URL of your n8n instance (set this for meta logs to come back to n8n). If not set, meta logs go to https://httpbin.org/anything for testing.
+- VA_API_BASE_URL: Base URL of VA Dashboard backend API (if not set, falls back to https://httpbin.org/anything/api for testing)
 - VA_API_KEY: Bearer token for VA API
 - RATE_LIMIT_MINUTES: Duplicate-drop window (default 5)
 - SLACK_ESCALATIONS_CHANNEL: Slack channel ID for escalations
 - SLACK_CONTENT_REVIEW_CHANNEL: Slack channel ID for content review
 - SLACK_INTERNAL_TEAM_CHANNEL: Slack channel ID for internal team notifications
+- EXTERNAL_PARTY_WEBHOOK_URL: Where Workflow 10 dispatches pathway payloads (defaults to https://httpbin.org/anything/external)
+- ACK_TIMEOUT_HOURS: Hours to wait for an ACK before escalation (default 2)
+- OPERATOR_EMAIL_API_URL: Email endpoint for operator assignment (defaults using DUMMY_API_BASE)
+- OPERATOR_SLACK_FALLBACK_CHANNEL: Slack channel ID fallback for operator notification
+- DUMMY_API_BASE: Base for all dummy external calls (default https://httpbin.org/anything)
 
 Example: see .env.example in this folder.
 
@@ -115,6 +127,9 @@ Example: see .env.example in this folder.
 - The shaped payload includes a one-time `ack_url` pointing at `/webhook/w10-ack?token=...`
 - The payload is dispatched to `EXTERNAL_PARTY_WEBHOOK_URL`; then the flow waits `ACK_TIMEOUT_HOURS` and escalates if missing
 
+Test helpers:
+- You can simulate an ACK without a token using: `GET /webhook/w10-ack?test=1&record_id=<id>` (for Postman screenshots).
+
 3) Escalation Logic
 - Missing ACK after timeout → Slack alert to `SLACK_INTERNAL_TEAM_CHANNEL` and `ack_missing_escalated` audit log
 - Invalid ACK token → Slack alert and `invalid_ack_escalated` audit log
@@ -125,6 +140,7 @@ Example: see .env.example in this folder.
 - /webhook/w5-broadcast → Broadcast events logging/forwarding
 - /webhook/w8-meta-log → Unified audit/meta logging
 - /webhook/w9-rewrite → Draft restyling
+- /webhook/w10-ack → Accepts ACK token; supports `?test=1&record_id=<id>` for testing
 
 All webhooks write to the VA Dashboard via HTTP nodes using Authorization: Bearer VA_API_KEY.
 
@@ -181,7 +197,8 @@ All webhooks write to the VA Dashboard via HTTP nodes using Authorization: Beare
 
 ### End-to-End Testing (curl)
 Export or set:
-- export N8N_BASE_URL="https://dummy-n8n.example.com"
+- export N8N_BASE_URL="https://your-n8n.example.com"
+  - If you skip setting this in n8n, meta logs will go to https://httpbin.org/anything (200 OK but won’t appear in this workflow’s meta log).
 
 1) Draft Intake → /tasks
 ```bash
@@ -252,6 +269,14 @@ Verify alt draft saved in /api/drafts with priority=true.
 - Dates are ISO 8601 UTC strings.
 - Use the VA Dashboard UI or API to verify /tasks, /notifications, /audit, and /drafts results.
 
+
+## Postman Collection
+
+- Included `postman_collection.json` has ready-to-run requests:
+  - Operator assignment, Intake → Pathway → Dispatch, Review decision links, ACK valid/invalid, Missing-ACK escalation meta.
+- Set variables:
+  - `N8N_BASE_URL` to your n8n base (e.g., https://your-n8n.example.com)
+  - `ACK_TOKEN` only if you want to demo a real token; otherwise use the `?test=1&record_id=` helper
 
 ## VA Dashboard Integration Task Sheet
 
