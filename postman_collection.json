@@ -1,0 +1,102 @@
+{
+  "info": {
+    "name": "Operator-Draft-Escalation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "d1e2f3a4-b5c6-47d8-9123-d0e1f2a3b4c5"
+  },
+  "item": [
+    {
+      "name": "1) Operator assignment notification",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/webhook/operator-assigned",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["webhook", "operator-assigned"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"record_id\": \"pm-001\",\n  \"operator\": { \"email\": \"op@example.com\", \"slack_user\": \"U12345\", \"name\": \"Pat Operator\" },\n  \"notify_channel\": \"slack\"\n}"
+        }
+      }
+    },
+    {
+      "name": "2) Draft pathway flow (intake → pathway → dispatch)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/webhook/incoming",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["webhook", "incoming"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"record_id\": \"pm-002\",\n  \"inquiry\": \"Please propose a go-live plan and parameters for integration.\"\n}"
+        }
+      }
+    },
+    {
+      "name": "3) Escalation trigger (missing ACK)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// This request intentionally does nothing;",
+              "// Missing ACK is triggered automatically after ACK_TIMEOUT_HOURS by the workflow.",
+              "pm.test('Manual step', function () { pm.expect(true).to.be.true; });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/webhook/w8-meta-log",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["webhook", "w8-meta-log"]
+        }
+      }
+    },
+    {
+      "name": "(Optional) ACK valid token",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/webhook/w10-ack?token={{ACK_TOKEN}}",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["webhook", "w10-ack"],
+          "query": [
+            { "key": "token", "value": "{{ACK_TOKEN}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "(Negative) ACK invalid token",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/webhook/w10-ack?token=INVALID",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["webhook", "w10-ack"],
+          "query": [
+            { "key": "token", "value": "INVALID" }
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "N8N_BASE_URL", "value": "https://dummy-n8n.example.com" },
+    { "key": "ACK_TOKEN", "value": "" }
+  ]
+}
+

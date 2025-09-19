@@ -1,10 +1,10 @@
 ### Import and Testing Guide (All-in-one Workflow)
 
 - Ensure env vars are set in n8n (.env or UI):
-  - N8N_BASE_URL, RATE_LIMIT_MINUTES, VA_API_BASE_URL, VA_API_KEY, SLACK_ESCALATIONS_CHANNEL, SLACK_CONTENT_REVIEW_CHANNEL, SLACK_INTERNAL_TEAM_CHANNEL
+  - N8N_BASE_URL, RATE_LIMIT_MINUTES, VA_API_BASE_URL, VA_API_KEY, SLACK_ESCALATIONS_CHANNEL, SLACK_CONTENT_REVIEW_CHANNEL, SLACK_INTERNAL_TEAM_CHANNEL, EXTERNAL_PARTY_WEBHOOK_URL, ACK_TIMEOUT_HOURS, OPERATOR_EMAIL_API_URL, OPERATOR_SLACK_FALLBACK_CHANNEL
 
 - Import JSONs:
-  - Only `workflows.json` (contains Workflows 1–9 + utilities).
+  - Only `workflows.json` (contains Workflows 1–10 + utilities).
 
 - Enable the workflow and confirm the following webhook endpoints exist (under nodes):
   - Review decision: `/webhook/review`
@@ -12,6 +12,8 @@
   - Broadcaster: `/webhook/w5-broadcast`
   - Meta Logger: `/webhook/w8-meta-log`
   - Draft Rewriter: `/webhook/w9-rewrite`
+  - Operator Assigned: `/webhook/operator-assigned`
+  - Pathway ACK: `/webhook/w10-ack`
 
 - Test flow end-to-end (dummy payloads):
   1) Trigger draft creation (Workflow 1) via Incoming Data webhook:
@@ -53,6 +55,38 @@
   - Env vars: all dummy endpoints respect `N8N_BASE_URL` and `DUMMY_API_BASE` so you can point at mocks.
 
 
+## Screenshots: All 9 Workflows Firing End-to-End
+
+### 1) Intake (Workflow 1)
+![Intake webhook executed successfully](./assets/01-intake.png)
+
+### 2) Review (Workflow 2)
+![Review decision received and task status updated](./assets/02-review.png)
+
+### 3) Escalation (Workflow 3)
+![Escalation created, Slack notified, audit recorded](./assets/03-escalation.png)
+
+### 4) Completion (Workflow 4)
+![Completion detected and internal team notified](./assets/04-completion.png)
+
+### 5) Broadcast (Workflow 5)
+![Broadcast webhook invoked and meta logged](./assets/05-broadcast.png)
+
+### 6) Listener (Workflow 6)
+![Listener normalized response and stored notification](./assets/06-listener.png)
+
+### 7) Nudge (Workflow 7)
+![Daily nudge generated, sent, and logged](./assets/07-nudge.png)
+
+### 8) Meta Log (Workflow 8)
+![Meta logger computed latency and stored unified audit](./assets/08-meta-log.png)
+
+### 9) Draft Rewriter (Workflow 9)
+![Draft restyled by AI and alt saved with priority](./assets/09-draft-rewriter.png)
+
+Note: Place real execution screenshots at the above paths under `assets/`.
+
+
 ## Sandy Phantom Project – VA Dashboard Integration
 
 This n8n workflow set replaces Google Sheets with the Staff/VA Dashboard API as the system of record.
@@ -69,6 +103,21 @@ Add these in n8n (Settings → Variables) or a local .env for reference:
 - SLACK_INTERNAL_TEAM_CHANNEL: Slack channel ID for internal team notifications
 
 Example: see .env.example in this folder.
+
+### New Operator + Pathway + Escalation Flows
+
+1) Operator Notification Flow
+- Trigger: `POST /webhook/operator-assigned` with `{ record_id, operator: { email?, slack_user?, name? }, notify_channel: 'slack'|'email' }`
+- Normalizer chooses Slack vs Email and sends message; logs `operator_notified` to Meta Logger
+
+2) Draft Pathway Builder
+- After intake task is created, a prompt is generated to produce `{ pathway: { timeline: [{ step, eta_days }], parameters: { priority, owner } } }`
+- The shaped payload includes a one-time `ack_url` pointing at `/webhook/w10-ack?token=...`
+- The payload is dispatched to `EXTERNAL_PARTY_WEBHOOK_URL`; then the flow waits `ACK_TIMEOUT_HOURS` and escalates if missing
+
+3) Escalation Logic
+- Missing ACK after timeout → Slack alert to `SLACK_INTERNAL_TEAM_CHANNEL` and `ack_missing_escalated` audit log
+- Invalid ACK token → Slack alert and `invalid_ack_escalated` audit log
 
 ### Webhook Entry Points
 - /webhook/incoming → Intake (record_id, inquiry)
@@ -125,7 +174,8 @@ All webhooks write to the VA Dashboard via HTTP nodes using Authorization: Beare
 
 ### Safeguards
 - Rate limiting: duplicates within RATE_LIMIT_MINUTES are dropped by a dedupe code node
-- Error workflow: configured; ensure Slack/email alerting as needed in your n8n instance
+- Error workflow: configured; Slack alert and error log are emitted on failures
+- Payload consistency: standardized on record_id, inquiry, ai_draft (lowercase) across nodes
 - Payload consistency: standardized on record_id (lowercase) across nodes
 - Hidden hooks to audit: broadcast_type, response_tier, token_supported, latency_score, priority flag
 
@@ -247,7 +297,7 @@ All webhook nodes call VA Dashboard API with Authorization: Bearer VA_API_KEY.
 ### Safeguards
 - Rate-limit duplicates within RATE_LIMIT_MINUTES
 - Error workflow → confirm Slack/email alerts
-- Standardize payload key → always record_id
+- Standardize payload keys → always lowercase: record_id, inquiry, ai_draft
 - Hidden hooks audited: broadcast_type, response_tier, token_supported, latency_score, priority
 
 ### Confirmations (Before merge)

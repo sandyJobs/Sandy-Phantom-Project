@@ -449,7 +449,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = Array.isArray($json.items) ? $json.items : ($json.data || $json.tasks || []);\nconst list = Array.isArray(items) ? items : [];\nconst globalData = getWorkflowStaticData('global');\nif (!globalData.completed_notified) globalData.completed_notified = {};\nconst out = [];\nfor (const t of list) {\n  const id = String(t.record_id || t.id || t.task_id || '');\n  const status = String(t.status || '').toLowerCase();\n  if (!id) continue;\n  if (status === 'completed' && !globalData.completed_notified[id]) {\n    globalData.completed_notified[id] = true;\n    out.push({ json: { record_id: id, status: 'completed' } });\n  }\n}\nreturn out;"
+        "jsCode": "const items = Array.isArray($json.items) ? $json.items : ($json.data || $json.tasks || []);\nconst list = Array.isArray(items) ? items : [];\nconst globalData = getWorkflowStaticData('global');\nif (!globalData.completed_notified) globalData.completed_notified = {};\nconst out = [];\nfor (const t of list) {\n  const id = String(t.record_id || t.id || t.task_id || '');\n  const status = String(t.status || '').toLowerCase();\n  if (!id) continue;\n  if (status === 'completed' && !globalData.completed_notified[id]) {\n    globalData.completed_notified[id] = true;\n    out.push({ json: { record_id: id, status: 'completed', check: 'not sent', EscalateStatus: 'wait' } });\n  }\n}\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -473,7 +473,7 @@
             {
               "id": "17ca0fb1-7886-4d9a-9d7d-ab3c759e9577",
               "leftValue": "={{ $json.status }}",
-              "rightValue": "=completed",
+              "rightValue": "completed",
               "operator": {
                 "type": "string",
                 "operation": "equals",
@@ -646,6 +646,22 @@
             {
               "name": "SLACK_INTERNAL_TEAM_CHANNEL",
               "value": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}"
+            },
+            {
+              "name": "EXTERNAL_PARTY_WEBHOOK_URL",
+              "value": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://example.local/dummy/external' }}"
+            },
+            {
+              "name": "ACK_TIMEOUT_HOURS",
+              "value": "={{ $env.ACK_TIMEOUT_HOURS || '2' }}"
+            },
+            {
+              "name": "OPERATOR_EMAIL_API_URL",
+              "value": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://example.local') + '/dummy/email' }}"
+            },
+            {
+              "name": "OPERATOR_SLACK_FALLBACK_CHANNEL",
+              "value": "={{ $env.OPERATOR_SLACK_FALLBACK_CHANNEL || $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}"
             }
           ]
         },
@@ -1307,6 +1323,577 @@
       "id": "w9-note",
       "name": "Sticky Note9"
     }
+    ,
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        -256
+      ],
+      "id": "error-trigger",
+      "name": "On Error"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || $json.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "=Workflow error in {{ $json.workflow?.name || 'unknown' }}: {{ $json.error?.message || 'No message' }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        -832,
+        -256
+      ],
+      "id": "error-alert-slack",
+      "name": "Error Alert",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ action: 'error', error_message: ($json.error||{}).message, workflow: ($json.workflow||{}).name, timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -704,
+        -256
+      ],
+      "id": "log-error",
+      "name": "Log Error"
+    },
+    {
+      "parameters": {
+        "path": "operator-assigned",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        -16
+      ],
+      "id": "op-assign-hook",
+      "name": "op-assign-hook",
+      "webhookId": "={{ $env.WEBHOOK_OPERATOR_ASSIGNED_ID || 'op-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $json.query || {}; const body = $json.body || $json || {}; const recordId = (body.record_id || q.record_id || body.id || '').toString(); const operatorEmail = (body.operator_email || (body.operator||{}).email || '').toString(); const operatorSlack = (body.operator_slack || (body.operator||{}).slack_user || '').toString(); const operatorName = (body.operator_name || (body.operator||{}).name || '').toString(); const channelPref = (body.notify_channel || (operatorSlack ? 'slack' : 'email')).toString().toLowerCase(); $json.record_id = recordId; $json.operator = { email: operatorEmail, slack_user: operatorSlack, name: operatorName, channel: channelPref }; $json.notify_channel = channelPref; $json.message = `You have been assigned to record #${recordId}.`; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        -16
+      ],
+      "id": "op-assign-normalize",
+      "name": "op-assign-normalize"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if-slack-equals",
+              "leftValue": "={{ $json.notify_channel }}",
+              "rightValue": "slack",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        -16
+      ],
+      "id": "if-slack",
+      "name": "If Slack"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if-email-equals",
+              "leftValue": "={{ $json.notify_channel }}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        80
+      ],
+      "id": "if-email",
+      "name": "If Email"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.OPERATOR_SLACK_FALLBACK_CHANNEL || $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "={{ 'Operator assigned: #' + ($json.record_id || 'unknown') + ($json.operator?.name ? (' to ' + $json.operator.name) : '') + ($json.operator?.slack_user ? (' (user: ' + $json.operator.slack_user + ')') : '') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        -16
+      ],
+      "id": "notify-operator-slack",
+      "name": "notify-operator-slack",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://example.local') + '/dummy/email' }}",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ to: ($json.operator||{}).email || 'dummy@mock.local', subject: 'Operator Assignment', body: $json.message }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        80
+      ],
+      "id": "notify-operator-email",
+      "name": "notify-operator-email"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'operator_notified', channel: $json.notify_channel, timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        32
+      ],
+      "id": "log-operator-notified",
+      "name": "log-operator-notified"
+    },
+    {
+      "parameters": {
+        "jsCode": "const it = $input.first().json || {}; const inquiry = it.inquiry || it.Inquiry || ''; const aiDraft = it.ai_draft || it['AI Draft'] || ''; const recordId = it.record_id || it['Record ID'] || it['Record Id'] || 'unknown'; const prompt = `Respond ONLY with JSON in this exact shape: {\\\"pathway\\\":{\\\"timeline\\\":[{\\\"step\\\":\\\"<text>\\\",\\\"eta_days\\\":<int>}],\\\"parameters\\\":{\\\"priority\\\":\\\"<low|normal|high>\\\",\\\"owner\\\":\\\"<role>\\\"}}}. No prose.\\n\\nInput:\\nrecord_id: ${recordId}\\ninquiry: ${inquiry}\\nai_draft: ${aiDraft}`; $json.prompt = prompt; $json.record_id = recordId; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -144
+      ],
+      "id": "w10-build-pathway-prompt",
+      "name": "w10-build-pathway-prompt"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        480,
+        -144
+      ],
+      "id": "w10-ai-pathway",
+      "name": "w10-ai-pathway",
+      "credentials": {
+        "openAiApi": {
+          "id": "dummy",
+          "name": "Dummy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $json?.choices?.[0]?.message?.content; let pathway = {}; if (content && typeof content === 'object' && content.pathway) { pathway = content.pathway; } else if (content && typeof content === 'string') { try { const parsed = JSON.parse(content); pathway = parsed.pathway || parsed; } catch (e) { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } } else { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } const recordId = $json.record_id || 'unknown'; const base = $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local'; const token = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0,24); const ackUrl = `${base}/webhook/w10-ack?token=${encodeURIComponent(token)}`; const globalData = getWorkflowStaticData('global'); if (!globalData.ackTokens) globalData.ackTokens = {}; if (!globalData.ackReceived) globalData.ackReceived = {}; globalData.ackTokens[token] = recordId; if (globalData.ackReceived[recordId] !== true) globalData.ackReceived[recordId] = false; $json.pathway = pathway; $json.ack_token = token; $json.ack_url = ackUrl; $json.dispatchPayload = { record_id: recordId, pathway, ack_url: ackUrl, generated_at: new Date().toISOString() }; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -144
+      ],
+      "id": "w10-shape-pathway",
+      "name": "w10-shape-pathway"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://example.local/dummy/external' }}",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify($json.dispatchPayload) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        992,
+        -144
+      ],
+      "id": "w10-dispatch-external",
+      "name": "w10-dispatch-external"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'pathway_dispatched', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1248,
+        -144
+      ],
+      "id": "w10-log-dispatched",
+      "name": "w10-log-dispatched"
+    },
+    {
+      "parameters": {
+        "amount": "={{ parseInt($env.ACK_TIMEOUT_HOURS || $json.ACK_TIMEOUT_HOURS || '2') }}",
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        992,
+        -80
+      ],
+      "id": "w10-wait-for-ack",
+      "name": "w10-wait-for-ack",
+      "webhookId": "={{ $env.WEBHOOK_W10_WAIT_ACK_ID || 'w10wait-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const globalData = getWorkflowStaticData('global'); const rec = $json.record_id || 'unknown'; const acked = !!(globalData.ackReceived && globalData.ackReceived[rec]); $json.missingAck = acked ? 'ok' : 'missing'; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -80
+      ],
+      "id": "w10-check-ack",
+      "name": "w10-check-ack"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if-missing-ack",
+              "leftValue": "={{ $json.missingAck }}",
+              "rightValue": "missing",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        -80
+      ],
+      "id": "w10-if-missing-ack",
+      "name": "w10-if-missing-ack"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "={{ 'No ACK received within timeout for record #' + ($json.record_id || 'unknown') + '. Last ack_url: ' + ($json.ack_url || 'n/a') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1728,
+        -80
+      ],
+      "id": "w10-escalate-missing",
+      "name": "w10-escalate-missing",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'ack_missing_escalated', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1968,
+        -80
+      ],
+      "id": "w10-log-ack-escalation",
+      "name": "w10-log-ack-escalation"
+    },
+    {
+      "parameters": {
+        "path": "w10-ack",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        2080
+      ],
+      "id": "w10-ack-webhook",
+      "name": "w10-ack-webhook",
+      "webhookId": "={{ $env.WEBHOOK_W10_ACK_ID || 'ack-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const token = (($json.query||{}).token || '').toString(); const globalData = getWorkflowStaticData('global'); const map = globalData.ackTokens || {}; const recId = map[token]; if (recId) { if (!globalData.ackReceived) globalData.ackReceived = {}; globalData.ackReceived[recId] = true; $json.record_id = recId; $json.ack_status = 'valid'; } else { $json.record_id = 'unknown'; $json.ack_status = 'invalid'; } return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        2080
+      ],
+      "id": "w10-parse-ack",
+      "name": "w10-parse-ack"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ack-valid",
+              "leftValue": "={{ $json.ack_status }}",
+              "rightValue": "valid",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        2080
+      ],
+      "id": "w10-ack-valid",
+      "name": "w10-ack-valid"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'ack_received', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        2080
+      ],
+      "id": "w10-save-ack",
+      "name": "w10-save-ack"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'ack_logged', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        2080
+      ],
+      "id": "w10-log-ack-received",
+      "name": "w10-log-ack-received"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "={{ 'Invalid ACK token received for record #' + ($json.record_id || 'unknown') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        -240,
+        2144
+      ],
+      "id": "w10-escalate-invalid-ack",
+      "name": "w10-escalate-invalid-ack",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://example.local' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'invalid_ack_escalated', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        2144
+      ],
+      "id": "w10-log-invalid-ack",
+      "name": "w10-log-invalid-ack"
+    }
   ],
   "pinData": {
     "reviewDecision": [
@@ -1434,6 +2021,11 @@
             "node": "Log Created",
             "type": "main",
             "index": 1
+          },
+          {
+            "node": "w10-build-pathway-prompt",
+            "type": "main",
+            "index": 2
           }
         ]
       ]
@@ -1467,25 +2059,26 @@
             "node": "Create Escalation (VA)",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Audit Escalation (VA)",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
     },
     "escalation": {
       "main": [
-        []
+        [
+          {
+            "node": "Audit Escalation (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "status inReview": {
+    "Create Escalation (VA)": {
       "main": [
         [
           {
-            "node": "block format",
+            "node": "escalation",
             "type": "main",
             "index": 0
           }
@@ -1544,17 +2137,6 @@
     "Log Decision": {
       "main": [
         []
-      ]
-    },
-    "reFetch Data": {
-      "main": [
-        [
-          {
-            "node": "in progress",
-            "type": "main",
-            "index": 0
-          }
-        ]
       ]
     },
     
@@ -1658,17 +2240,7 @@
         ]
       ]
     },
-    "in progress": {
-      "main": [
-        [
-          {
-            "node": "escalation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
+    
     "3 min": {
       "main": [
         [
@@ -1877,6 +2449,242 @@
           }
         ]
       ]
+    },
+    "On Error": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "op-assign-hook": {
+      "main": [
+        [
+          {
+            "node": "op-assign-normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "op-assign-normalize": {
+      "main": [
+        [
+          {
+            "node": "If Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Email",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If Slack": {
+      "main": [
+        [
+          {
+            "node": "notify-operator-slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Email": {
+      "main": [
+        [
+          {
+            "node": "notify-operator-email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-operator-slack": {
+      "main": [
+        [
+          {
+            "node": "log-operator-notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-operator-email": {
+      "main": [
+        [
+          {
+            "node": "log-operator-notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-build-pathway-prompt": {
+      "main": [
+        [
+          {
+            "node": "w10-ai-pathway",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-ai-pathway": {
+      "main": [
+        [
+          {
+            "node": "w10-shape-pathway",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-shape-pathway": {
+      "main": [
+        [
+          {
+            "node": "w10-dispatch-external",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-dispatch-external": {
+      "main": [
+        [
+          {
+            "node": "w10-log-dispatched",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "w10-wait-for-ack",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "w10-wait-for-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-check-ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-check-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-if-missing-ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-if-missing-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-escalate-missing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "w10-log-ack-escalation",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "w10-ack-webhook": {
+      "main": [
+        [
+          {
+            "node": "w10-parse-ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-parse-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-ack-valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-ack-valid": {
+      "main": [
+        [
+          {
+            "node": "w10-save-ack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "w10-escalate-invalid-ack",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "w10-log-invalid-ack",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "w10-save-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-log-ack-received",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -1892,4 +2700,4 @@
   },
   "id": "yZzsgVqt7O5zJERG",
   "tags": []
-}
+} 
