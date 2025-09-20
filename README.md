@@ -29,7 +29,7 @@
      curl "$N8N_BASE_URL/webhook/review?record_id=12345&decision=escalate"
      ```
   4) Escalation (Workflow 3) → verify dummy pool append + (abstract) Slack node executed.
-  5) Completion (Workflow 4) → when the task is marked completed in the VA Dashboard (PATCH /tasks/:id), after 3 minutes internal notification runs, then `sent` → logs task_completed and calls Broadcaster.
+  5) Completion (Workflow 4) → when the task is marked completed in the VA Dashboard (PATCH /tasks/:id), the cron checks every minute, notifies the internal team, logs task_completed, then calls the Broadcaster.
   6) Broadcaster (Workflow 5) → can be invoked directly for testing:
      ```bash
      curl -X POST "$N8N_BASE_URL/webhook/w5-broadcast" -H "Content-Type: application/json" \
@@ -50,48 +50,21 @@
       ```
       Confirm alt draft row and `priority=true` saved.
 
+  10b) Pathway + ACK (Workflow 10) → after intake, a pathway is generated and dispatched to `EXTERNAL_PARTY_WEBHOOK_URL`. To simulate ACK without a token during testing:
+     ```bash
+     curl "$N8N_BASE_URL/webhook/w10-ack?test=1&record_id=12345"
+     ```
+     If no ACK is received within `ACK_TIMEOUT_HOURS`, an escalation alert is sent to Slack and logged.
+
 - Safeguards and Utilities:
   - Rate limiting: `RATE_LIMIT_MINUTES` prevents duplicate incoming records within the window (see `Rate Limit / Dedupe`).
   - Run tracking: internal per-workflow global store (`Run Tracker`) logs each run start (for debugging).
   - Env vars: dummy endpoints use `DUMMY_API_BASE` (default https://httpbin.org/anything). Set `N8N_BASE_URL` to your public n8n if you want meta logs to loop back into this workflow.
 
 
-## Screenshots: All 10 Workflows Firing End-to-End
+## Screenshots
 
-### 0) Operator Assignment (Utility)
-![Operator assigned and notified](./assets/00-operator-assign.png)
-
-### 1) Intake (Workflow 1)
-![Intake webhook executed successfully](./assets/01-intake.png)
-
-### 2) Review (Workflow 2)
-![Review decision received and task status updated](./assets/02-review.png)
-
-### 3) Escalation (Workflow 3)
-![Escalation created, Slack notified, audit recorded](./assets/03-escalation.png)
-
-### 4) Completion (Workflow 4)
-![Completion detected and internal team notified](./assets/04-completion.png)
-
-### 5) Broadcast (Workflow 5)
-![Broadcast webhook invoked and meta logged](./assets/05-broadcast.png)
-
-### 6) Listener (Workflow 6)
-![Listener normalized response and stored notification](./assets/06-listener.png)
-
-### 7) Nudge (Workflow 7)
-![Daily nudge generated, sent, and logged](./assets/07-nudge.png)
-
-### 8) Meta Log (Workflow 8)
-![Meta logger computed latency and stored unified audit](./assets/08-meta-log.png)
-
-### 9) Draft Rewriter (Workflow 9)
-![Draft restyled by AI and alt saved with priority](./assets/09-draft-rewriter.png)
-
-### 10) Pathway + ACK (Workflow 10)
-![Pathway generated, dispatched, and ACK recorded/escalated](./assets/10-pathway-ack.png)
-
-Note: Place real execution screenshots at the above paths under `assets/`.
+Screenshots for all workflows are stored under `Screenshots/*`. 
 
 
 ## Sandy Phantom Project – VA Dashboard Integration
@@ -137,6 +110,7 @@ Test helpers:
 ### Webhook Entry Points
 - /webhook/incoming → Intake (record_id, inquiry)
 - /webhook/review → Review actions (approve|edit|reject|escalate)
+- /webhook/operator-assigned → Operator assignment notifications (Slack or Email)
 - /webhook/w5-broadcast → Broadcast events logging/forwarding
 - /webhook/w8-meta-log → Unified audit/meta logging
 - /webhook/w9-rewrite → Draft restyling
@@ -264,6 +238,25 @@ curl -X POST "$N8N_BASE_URL/webhook/w9-rewrite" \
 ```
 Verify alt draft saved in /api/drafts with priority=true.
 
+10) Pathway + ACK
+```bash
+# Dispatch happens automatically after intake; to simulate an ACK without a token:
+curl "$N8N_BASE_URL/webhook/w10-ack?test=1&record_id=12345"
+```
+If no ACK arrives within ACK_TIMEOUT_HOURS, a Slack alert is sent and an `ack_missing_escalated` log is written.
+
+11) Operator Assignment (Utility)
+```bash
+curl -X POST "$N8N_BASE_URL/webhook/operator-assigned" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "record_id": "12345",
+    "operator": { "email": "agent@example.com", "slack_user": "U00000000", "name": "Agent Smith" },
+    "notify_channel": "slack"
+  }'
+```
+Expect a Slack message (or email if `notify_channel: "email"`) and an `operator_notified` meta log.
+
 ### Notes
 - All outgoing VA API HTTP requests include Authorization: Bearer VA_API_KEY and use JSON bodies.
 - Dates are ISO 8601 UTC strings.
@@ -294,9 +287,11 @@ SLACK_INTERNAL_TEAM_CHANNEL=xxx
 ### Webhooks
 - /webhook/incoming → Task intake + AI draft
 - /webhook/review → Decision: approve | edit | reject | escalate
+- /webhook/operator-assigned → Operator notification (Slack or Email)
 - /webhook/w5-broadcast → Broadcast logs
 - /webhook/w8-meta-log → Unified audit logging
 - /webhook/w9-rewrite → AI draft restyle
+- /webhook/w10-ack → ACK token receiver (supports `?test=1&record_id=<id>`)
 
 All webhook nodes call VA Dashboard API with Authorization: Bearer VA_API_KEY.
 
@@ -318,6 +313,8 @@ All webhook nodes call VA Dashboard API with Authorization: Bearer VA_API_KEY.
 - Smart Responder → Daily nudge → /notifications (+ audit token_supported)
 - Meta Logger → Central audit (latency_score, transitions)
 - Draft Rewriter → AI restyle → POST /drafts (priority flag)
+10) Pathway + ACK
+- Build pathway JSON via AI after intake, dispatch to EXTERNAL_PARTY_WEBHOOK_URL, wait for ACK via /webhook/w10-ack, escalate on timeout or invalid token; logs via /webhook/w8-meta-log → /api/audit
 
 ### Safeguards
 - Rate-limit duplicates within RATE_LIMIT_MINUTES
@@ -328,4 +325,4 @@ All webhook nodes call VA Dashboard API with Authorization: Bearer VA_API_KEY.
 ### Confirmations (Before merge)
 - Error Handling: Ensure the error workflow actually routes to Slack/email (not just logs silently). If not, wire a Slack node or a simple email node.
 - Auth & Security: VA_API_KEY must be stored securely (n8n credentials, not plaintext). Optional: enable basic rate-limit middleware on webhooks to prevent spam.
-- Testing Proof: Provide screenshots of all 9 workflows firing end-to-end against the VA Dashboard (not Google Sheets).
+- Testing Proof: Provide screenshots of all 10 workflows firing end-to-end against the VA Dashboard (not Google Sheets), plus the operator assignment utility. Store them under `Screenshots/`.

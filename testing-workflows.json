@@ -1,0 +1,2784 @@
+{
+  "name": "Sandy Phantom prjct",
+  "nodes": [
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Respond ONLY with JSON in this exact shape: {\\\"record_id\\\":\\\"<same as input>\\\",\\\"inquiry\\\":\\\"<same as input>\\\",\\\"ai_draft\\\":\\\"<draft>\\\"}. No extra text.\n\nInput:\nrecord_id: {{ $json.record_id }}\ninquiry: {{ $json.inquiry }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -368,
+        -144
+      ],
+      "id": "cbb75b5b-70c4-4a28-9b3c-ebcf1161e646",
+      "name": "Message a model",
+      "disabled": true,
+      "continueOnFail": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "dummy",
+          "name": "Dummy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse decision webhook query and normalize fields\nconst queryData = $input.first().json.query;\nif (queryData && queryData.decision && queryData.record_id) {\n  const decision = String(queryData.decision || '').toLowerCase();\n  const recordId = String(queryData.record_id || '');\n  return [{ json: {\n    decision,\n    status: decision,\n    record_id: recordId,\n    airtableRecordId: recordId,\n    originalQuery: queryData\n  } }];\n} else {\n  console.log('Received Query Data:', JSON.stringify(queryData, null, 2));\n  throw new Error(\"Missing required parameters: 'decision' and 'record_id'.\");\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        336
+      ],
+      "id": "bb3c9216-7f51-4067-a639-d5362f32b43e",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "26dc4441-f0af-4e25-ab96-635b8c4b0ce5",
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "escalate",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        336
+      ],
+      "id": "7a5d2ade-f0fc-4e0b-bbaa-0dc525d0e090",
+      "name": "escalate"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || $json.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "=An escalated task has been completed for record ID: {{ $json.record_id }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        400,
+        864
+      ],
+      "id": "bd975ccb-0201-4245-b5d5-8c71fa69e9ca",
+      "name": "internal team",
+      "disabled": true,
+      "webhookId": "a2e2ff58-a8df-4d9b-97ea-ce7dfd994f4d",
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_ESCALATIONS_CHANNEL || $json.SLACK_ESCALATIONS_CHANNEL || 'C0000000000' }}",
+        "text": "=A new inquiry has been escalated and requires expert review.\n\nRecord ID: {{ $json.record_id }}\nStatus: {{ $json.status || 'escalated' }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        -128,
+        608
+      ],
+      "id": "78351729-ca85-4af9-91bc-805449599c7f",
+      "name": "escalation",
+      "disabled": true,
+      "webhookId": "def3e998-d710-42d6-957c-c9318334bf0e",
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_CONTENT_REVIEW_CHANNEL || $json.SLACK_CONTENT_REVIEW_CHANNEL || 'C0000000000' }}",
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        32,
+        80
+      ],
+      "id": "c00df544-559d-4ed9-b100-04f56f21b62c",
+      "name": "content review",
+      "disabled": true,
+      "webhookId": "326c7b50-e57c-47de-827d-892dad1cf3d6",
+      "continueOnFail": true,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://timi2025.app.n8n.cloud' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || 'unknown', action: 'review_notified', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        256,
+        80
+      ],
+      "id": "log-review-notified",
+      "name": "Log Review Notified"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -448,
+        80
+      ],
+      "id": "fa887781-a68a-4fda-8836-5edd04fac341",
+      "name": "Fetch Under Review (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Slack message with dynamic N8N base URL and normalized fields\nconst input = $input.first().json || {};\nconst recordId = input.record_id || input['Record ID'] || input['Record Id'] || 'unknown';\nconst inquiry = input.inquiry || input.Inquiry || '';\nconst aiDraft = input.ai_draft || input['AI Draft'] || '';\nconst base = input.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://timi2025.app.n8n.cloud';\nconst n8nWebhookBaseUrl = `${base}/webhook/review`;\n\nconst approveLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=approve`;\nconst editLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=edit`;\nconst rejectLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=reject`;\nconst escalateLink = `${n8nWebhookBaseUrl}?record_id=${recordId}&decision=escalate`;\n\nconst messageText = `\n⚠️ *New Draft Ready for Review* 🚀\n\n*Record ID:* ${recordId}\n*Inquiry:* ${inquiry}\n*AI Draft:* ${aiDraft}\n\n*Please click one of the links below to take action:*\n✅ Approve: ${approveLink}\n✏️  Edit: ${editLink}\n❌ Reject: ${rejectLink}\n🔺 Escalate: ${escalateLink}\n`;\n\n$json.slackMessage = messageText;\n$json.record_id = recordId;\n$json.inquiry = inquiry;\n$json.ai_draft = aiDraft;\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        80
+      ],
+      "id": "8a0bd19f-6ebc-402b-b75c-9c771f021b89",
+      "name": "block format"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        80
+      ],
+      "id": "aa7b8418-694a-4ab5-9fec-65d6836195fd",
+      "name": "Wait",
+      "webhookId": "={{ $env.WEBHOOK_WAIT_ID || 'wait-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks/' + ($json.record_id || $json.airtableRecordId) }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "PATCH",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ status: ((($json.decision || '')+'' ).toLowerCase() === 'approve' ? 'approved' : ((($json.decision || '')+'' ).toLowerCase() === 'edit' ? 'edited' : ((($json.decision || '')+'' ).toLowerCase() === 'reject' ? 'rejected' : ((($json.decision || '')+'' ).toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || '')+'' ).toLowerCase())))) }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -208,
+        336
+      ],
+      "id": "3adeb93c-39a2-4545-95f9-f60f316b8868",
+      "name": "change status (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -656,
+        608
+      ],
+      "id": "81e5622c-f6fc-4d77-aa95-5c0c40dd790a",
+      "name": "Fetch Escalations (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 1\nGenerate a draft response, from incoming message/inquiry",
+        "height": 208,
+        "width": 1792
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        -208
+      ],
+      "id": "d59699a2-1adf-4c64-ab6a-56d19992f51c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 2a\nReviewer and respond with e.g., *Approve, Edit, Reject, Escalated",
+        "height": 208,
+        "width": 1792,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        48
+      ],
+      "id": "eab77932-748b-49eb-90af-3d7ba7ce016a",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 2b\nNotify reviewer (via email/Slack integration)",
+        "height": 208,
+        "width": 1792,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        304
+      ],
+      "id": "2a164438-6da8-4c42-990f-619a8abe38b9",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 3\nIf record is marked as \"Escalated\":\n\n  * Add task into Staff/VA Dashboard (/tasks) with status \"escalated\".\n  * Notify escalation channel (via Slack).",
+        "height": 208,
+        "width": 1808,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        560
+      ],
+      "id": "8f522668-1f9b-4bbc-ae0d-ab978d53c801",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 4\nWhen service pool marks task as Completed:\n\n  * Update task status in Staff/VA Dashboard.\n  * Notify internal team (email/Slack).\n",
+        "height": 416,
+        "width": 2048,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        832
+      ],
+      "id": "d1eb52f8-4f6b-46d9-8f26-0f01d3c49248",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks/' + $json.record_id }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "PATCH",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ status: $json.status || 'completed' }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -464,
+        928
+      ],
+      "id": "fd20addc-cb00-4fd5-8619-24b489ac47e1",
+      "name": "Mark Completed (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "path": "review",
+        "httpMethod": "GET",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -672,
+        336
+      ],
+      "id": "af966ac5-5a67-4de4-88b6-fc4fa2e5af87",
+      "name": "reviewDecision",
+      "webhookId": "={{ $env.WEBHOOK_REVIEW_ID || 'review-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -80,
+        928
+      ],
+      "id": "b8e328e5-7b7b-419b-87e2-81a26a0708e4",
+      "name": "Fetch Completed (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        1088
+      ],
+      "id": "w4-cron",
+      "name": "Cron: Check Completed"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = Array.isArray($json.items) ? $json.items : ($json.data || $json.tasks || []);\nconst list = Array.isArray(items) ? items : [];\nconst globalData = getWorkflowStaticData('global');\nif (!globalData.completed_notified) globalData.completed_notified = {};\nconst out = [];\nfor (const t of list) {\n  const id = String(t.record_id || t.id || t.task_id || '');\n  const status = String(t.status || '').toLowerCase();\n  if (!id) continue;\n  if (status === 'completed' && !globalData.completed_notified[id]) {\n    globalData.completed_notified[id] = true;\n    out.push({ json: { record_id: id, status: 'completed', check: 'not sent', EscalateStatus: 'wait' } });\n  }\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        928
+      ],
+      "id": "w4-filter-completed",
+      "name": "Filter Completed"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "17ca0fb1-7886-4d9a-9d7d-ab3c759e9577",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "e76aca27-34cc-4400-bd9e-4dbdd1b5638d",
+              "leftValue": "={{ $json.check }}",
+              "rightValue": "not sent",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "578da3cc-79da-4b8d-a252-040a1e75c430",
+              "leftValue": "={{ $json.EscalateStatus }}",
+              "rightValue": "wait",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        128,
+        928
+      ],
+      "id": "bb48dfc4-faf0-4ea2-b263-e8153d864027",
+      "name": "not sent"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/audit' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ action: 'ESCALATION_SENT', event: 'Notification sent', meta: { record_id: $json.record_id }, created_at: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        592,
+        1088
+      ],
+      "id": "5e6ef7f4-5024-42ac-bd3e-a8b6071f5e8d",
+      "name": "Audit Escalation (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        400,
+        1088
+      ],
+      "id": "e0018db3-5e7e-40e5-835a-0952df7f6188",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "path": "incoming",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -672,
+        -144
+      ],
+      "id": "a5171cee-50d9-4452-8551-f2456860f358",
+      "name": "incoming data",
+      "webhookId": "={{ $env.WEBHOOK_INCOMING_ID || 'incoming-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/tasks' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, description: $json.ai_draft || '', status: 'escalated', created_at: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -368,
+        608
+      ],
+      "id": "ee3dd1dc-5ae7-4662-9a87-6e240697676e",
+      "name": "Create Escalation (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        928
+      ],
+      "id": "8763a345-2c3f-4d68-aa43-65f66de364fa",
+      "name": "3 min",
+      "webhookId": "={{ $env.WEBHOOK_3MIN_ID || 'wait3m-' + Math.random().toString(36).slice(2) }}"
+    },
+    
+    
+    {
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "N8N_BASE_URL",
+              "value": "={{ $env.N8N_BASE_URL || 'https://timi2025.app.n8n.cloud' }}"
+            },
+            {
+              "name": "VA_API_BASE_URL",
+              "value": "={{ $env.VA_API_BASE_URL || 'https://httpbin.org/anything/api' }}"
+            },
+            {
+              "name": "VA_API_KEY",
+              "value": "={{ $env.VA_API_KEY || 'your_va_api_key_here' }}"
+            },
+            {
+              "name": "RATE_LIMIT_MINUTES",
+              "value": "={{ $env.RATE_LIMIT_MINUTES || '5' }}"
+            },
+            {
+              "name": "SLACK_ESCALATIONS_CHANNEL",
+              "value": "={{ $env.SLACK_ESCALATIONS_CHANNEL || 'C0000000000' }}"
+            },
+            {
+              "name": "SLACK_CONTENT_REVIEW_CHANNEL",
+              "value": "={{ $env.SLACK_CONTENT_REVIEW_CHANNEL || 'C0000000000' }}"
+            },
+            {
+              "name": "SLACK_INTERNAL_TEAM_CHANNEL",
+              "value": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}"
+            },
+            {
+              "name": "EXTERNAL_PARTY_WEBHOOK_URL",
+              "value": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://httpbin.org/anything/external' }}"
+            },
+            {
+              "name": "ACK_TIMEOUT_HOURS",
+              "value": "={{ $env.ACK_TIMEOUT_HOURS || '2' }}"
+            },
+            {
+              "name": "OPERATOR_EMAIL_API_URL",
+              "value": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://httpbin.org/anything') + '/dummy/email' }}"
+            },
+            {
+              "name": "DUMMY_API_BASE",
+              "value": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}"
+            },
+            {
+              "name": "OPERATOR_SLACK_FALLBACK_CHANNEL",
+              "value": "={{ $env.OPERATOR_SLACK_FALLBACK_CHANNEL || $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -144
+      ],
+      "id": "0a6f3a3b-bf3e-4b8c-ae50-2f5a9d9e6f01",
+      "name": "Env Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\\nconst globalData = getWorkflowStaticData('global');\\nif (!globalData.lastSeen) { globalData.lastSeen = {}; }\\nconst now = Date.now();\\nconst minutesStr = (items[0]?.json?.RATE_LIMIT_MINUTES ?? '5').toString();\\nconst rateLimitMinutes = parseInt(minutesStr, 10) || 5;\\nconst recordId = items[0]?.json?.['Record Id'] || items[0]?.json?.['Record ID'] || items[0]?.json?.record_id || items[0]?.json?.id;\\nif (!recordId) {\\n  return items;\\n}\\nconst last = globalData.lastSeen[recordId] || 0;\\nif (now - last < rateLimitMinutes * 60 * 1000) {\\n  // duplicate within window: drop\\n  return [];\\n}\\nglobalData.lastSeen[recordId] = now;\\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        -144
+      ],
+      "id": "3d27e7b1-9a5b-40b1-9d01-9a6a9e9f0a31",
+      "name": "Rate Limit / Dedupe"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\\nconst globalData = getWorkflowStaticData('global');\\nif (!globalData.run_tracking) globalData.run_tracking = [];\\nconst it = items[0]?.json || {};\\nconst recId = it.record_id || it['Record ID'] || it['Record Id'] || 'unknown';\\nglobalData.run_tracking.push({ timestamp: new Date().toISOString(), workflow: 'Workflow 1–4 Combined', record_id: recId, status: it.status || 'received', note: 'run_start' });\\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -288,
+        -144
+      ],
+      "id": "2f9d3b2a-2d7a-4d25-8c5d-1c3a5f5b6c72",
+      "name": "Run Tracker"
+    },
+    {
+      "parameters": {
+        "jsCode": "const it = $input.first().json || {};\nconst ai = (it.choices?.[0]?.message?.content) || {};\nconst recordId = it.record_id || it['Record Id'] || it['Record ID'] || ai.record_id || ai.Record_ID || 'unknown';\nconst inquiry = it.inquiry || it.Inquiry || ai.inquiry || ai.Inquiry || '';\nconst aiDraft = it.ai_draft || it['AI Draft'] || ai.ai_draft || ai.AI_Draft || '';\n$json.record_id = recordId;\n$json.inquiry = inquiry;\n$json.ai_draft = aiDraft;\n$json.status = 'under_review';\n$json.taskPayload = { record_id: recordId, inquiry, ai_draft: aiDraft, status: 'under_review', created_at: new Date().toISOString() };\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        -144
+      ],
+      "id": "va-build-task",
+      "name": "Build Task Payload"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') }}/tasks",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || $json.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify($json.taskPayload || { record_id: $json.record_id, inquiry: $json.inquiry, ai_draft: $json.ai_draft, status: 'under_review', created_at: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -16,
+        -144
+      ],
+      "id": "va-create-task",
+      "name": "Create Task (VA)"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://timi2025.app.n8n.cloud' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', action: 'task_created', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        96,
+        -144
+      ],
+      "id": "7cbb5f8a-0e95-4fa9-8a6a-4b3f8b8d6f90",
+      "name": "Log Created"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', action: 'task_completed', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        752,
+        1088
+      ],
+      "id": "a7a1f6f9-6d6a-4b8a-8b39-1b4d6e9f0e21",
+      "name": "Log Completed"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://timi2025.app.n8n.cloud' }}/webhook/w5-broadcast",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', broadcast_type: 'dummy_email', sent_at: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        944,
+        1088
+      ],
+      "id": "b9c2d7e3-0c4a-4a8f-9f13-8e7f2d2c1a44",
+      "name": "Call Broadcaster"
+    },
+    {
+      "parameters": {
+        "path": "w5-broadcast",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -560,
+        -80
+      ],
+      "id": "w5-trigger",
+      "name": "Trigger: Broadcast Webhook",
+      "webhookId": "={{ $env.WEBHOOK_W5_BROADCAST_ID || 'w5-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const recordId = $json.record_id || '12345';\\nconst payload = { to: 'dummy@mock.local', subject: 'Broadcast Notice', body: `Record #${recordId} completed.` };\\n$json.broadcast_event = { record_id: recordId, broadcast_type: 'dummy_email', sent_at: new Date().toISOString() };\\n$json.notification = payload;\\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        1264
+      ],
+      "id": "w5-build",
+      "name": "Build Dummy Notification"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}/dummy/email",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify($json.notification) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -240,
+        1264
+      ],
+      "id": "w5-send",
+      "name": "Send Dummy Broadcast"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || '12345', action: 'broadcast_sent', timestamp: new Date().toISOString(), latency_score: 0, broadcast_type: ($json.broadcast_event||{}).broadcast_type }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        1264
+      ],
+      "id": "w5-log",
+      "name": "Hidden Hook: Log broadcast_type"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        1440
+      ],
+      "id": "w6-cron",
+      "name": "Poll Every Minute"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}/dummy/inbox",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -480,
+        1440
+      ],
+      "id": "w6-fetch",
+      "name": "Fetch Dummy Inbox"
+    },
+    {
+      "parameters": {
+        "jsCode": "const responses = Array.isArray($json.items) ? $json.items : [$json];\\nreturn responses.map((r, idx) => ({ json: { record_id: r.record_id || '12345', response_text: r.response_text || 'Got it, thanks.', response_tier: r.response_tier || 'standard', received_at: new Date().toISOString(), idx } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        1440
+      ],
+      "id": "w6-map",
+      "name": "Normalize Responses"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/notifications' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ task_id: $json.record_id, type: 'response', message: $json.response_text, response_tier: $json.response_tier, status: 'received', created_at: $json.received_at }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        1440
+      ],
+      "id": "w6-store",
+      "name": "Store Response (VA)"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'listener_saved', timestamp: new Date().toISOString(), response_tier: $json.response_tier }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        1440
+      ],
+      "id": "w6-log",
+      "name": "Hidden Hook: Log response_tier"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyDay",
+              "hour": 10,
+              "minute": 0
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        1616
+      ],
+      "id": "w7-cron",
+      "name": "Daily Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dummy inactivity: always emit one record older than 3 days\\nconst rec = { record_id: '12345', last_activity_at: new Date(Date.now()-4*24*3600*1000).toISOString() };\\nconst token = 'PREMIUM_TOKEN_PLACEHOLDER';\\n$json.nudge = { record_id: rec.record_id, nudge_type: '3-day-inactivity', message: `Hello {{name}}, just checking in — no recent action on #${rec.record_id}.`, token, sent_at: new Date().toISOString() };\\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        1616
+      ],
+      "id": "w7-build",
+      "name": "Build Nudge with Token"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.DUMMY_API_BASE || 'https://httpbin.org/anything' }}/dummy/nudge",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify($json.nudge) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -240,
+        1616
+      ],
+      "id": "w7-send",
+      "name": "Send Dummy Nudge"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/notifications' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ task_id: ($json.nudge||{}).record_id, type: 'nudge', message: ($json.nudge||{}).message, nudge_type: ($json.nudge||{}).nudge_type, status: 'sent', token_supported: true, created_at: ($json.nudge||{}).sent_at }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -120,
+        1616
+      ],
+      "id": "w7-store",
+      "name": "Store Nudge (VA)",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: ($json.nudge||{}).record_id, action: 'nudge_sent', timestamp: new Date().toISOString(), token_supported: true }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        1616
+      ],
+      "id": "w7-log",
+      "name": "Hidden Hook: Log token support"
+    },
+    {
+      "parameters": {
+        "path": "w8-meta-log",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        1792
+      ],
+      "id": "w8-hook",
+      "name": "Webhook: Receive Transition",
+      "webhookId": "={{ $env.WEBHOOK_W8_META_ID || 'w8-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $json.transition || 'created';\\nconst start = $json.start_time || Date.now()-1000;\\nconst end = Date.now();\\nconst latency = Math.max(0, Math.floor((end - start)/1000));\\n$json.latency_score = latency;\\n$json.timestamp = new Date().toISOString();\\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        1792
+      ],
+      "id": "w8-score",
+      "name": "Compute Latency Score"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/audit' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: $json.action || $json.transition, normalized_action: $json.normalized_action, timestamp: $json.timestamp, latency_score: $json.latency_score, broadcast_type: ($json.broadcast_type||'') }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -240,
+        1792
+      ],
+      "id": "w8-store",
+      "name": "Store Unified Log (VA)"
+    },
+    {
+      "parameters": {
+        "path": "w9-rewrite",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        1968
+      ],
+      "id": "w9-hook",
+      "name": "Webhook: Draft to Restyle",
+      "webhookId": "={{ $env.WEBHOOK_W9_REWRITE_ID || 'w9-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const draft = $json.draft || 'This is a sample draft response.';\\n$json.prompt = `Restyle the following politely and concisely. Respond ONLY with JSON: {\\\"draft_alt\\\": \\\"<text>\\\"}. No extra text.\\n\\nInput:\\n${draft}`;\\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        1968
+      ],
+      "id": "w9-build-prompt",
+      "name": "Build Restyle Prompt"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id || $json.airtableRecordId || 'unknown', action: 'task_reviewed', normalized_action: (($json.decision || '').toString().toLowerCase() === 'approve' ? 'approved' : (($json.decision || '').toString().toLowerCase() === 'escalate' ? 'escalated' : (($json.decision || '').toString().toLowerCase() === 'edit' ? 'edited' : (($json.decision || '').toString().toLowerCase() === 'reject' ? 'rejected' : ($json.decision || '').toString().toLowerCase())))), timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -56,
+        336
+      ],
+      "id": "log-decision",
+      "name": "Log Decision"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -240,
+        1968
+      ],
+      "id": "w9-ai",
+      "name": "Restyle with AI",
+      "disabled": true,
+      "continueOnFail": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "dummy",
+          "name": "Dummy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const recId = $json.record_id || '12345';\nconst content = ($json?.choices?.[0]?.message?.content?.draft_alt) || 'Restyled draft version here.';\n$json.rewriter_output = { record_id: recId, draft_alt: content, priority: true, created_at: new Date().toISOString() };\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1968
+      ],
+      "id": "w9-shape",
+      "name": "Shape Output"
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.VA_API_BASE_URL || $json.VA_API_BASE_URL || 'https://httpbin.org/anything/api') + '/drafts' }}",
+        "options": {
+          "headers": {
+            "Authorization": "={{ 'Bearer ' + ($env.VA_API_KEY || 'your_va_api_key_here') }}",
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ task_id: ($json.rewriter_output||{}).record_id || $json.record_id, content: ($json.rewriter_output||{}).draft_alt, priority: ($json.rewriter_output||{}).priority, created_at: ($json.rewriter_output||{}).created_at }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        1968
+      ],
+      "id": "w9-store",
+      "name": "Save Alt Draft (VA)"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: ($json.rewriter_output||{}).record_id || $json.record_id || 'unknown', action: 'draft_alt_saved', timestamp: new Date().toISOString(), priority: ($json.rewriter_output||{}).priority === true }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        1968
+      ],
+      "id": "w9-log",
+      "name": "Log Draft Alt Saved"
+    }
+    ,
+    {
+      "parameters": {
+        "content": "## Workflow 5\nBroadcast notification via webhook; send dummy email; log meta",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1216
+      ],
+      "id": "w5-note",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 6\nListener: poll inbox, normalize and store responses; log tier",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1392
+      ],
+      "id": "w6-note",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 7\nDaily nudge with token; send and log",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1568
+      ],
+      "id": "w7-note",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 8\nReceive transition; compute latency; store unified log",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1744
+      ],
+      "id": "w8-note",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "## Workflow 9\nRestyle draft via AI; save alt draft to VA",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        1920
+      ],
+      "id": "w9-note",
+      "name": "Sticky Note9"
+    }
+    ,
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        -256
+      ],
+      "id": "error-trigger",
+      "name": "On Error"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || $json.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "=Workflow error in {{ $json.workflow?.name || 'unknown' }}: {{ $json.error?.message || 'No message' }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        -832,
+        -256
+      ],
+      "id": "error-alert-slack",
+      "name": "Error Alert",
+      "disabled": true,
+      "continueOnFail": true,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ action: 'error', error_message: ($json.error||{}).message, workflow: ($json.workflow||{}).name, timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -704,
+        -256
+      ],
+      "id": "log-error",
+      "name": "Log Error"
+    },
+    {
+      "parameters": {
+        "path": "operator-assigned",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        -16
+      ],
+      "id": "op-assign-hook",
+      "name": "op-assign-hook",
+      "webhookId": "={{ $env.WEBHOOK_OPERATOR_ASSIGNED_ID || 'op-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $json.query || {}; const body = $json.body || $json || {}; const recordId = (body.record_id || q.record_id || body.id || '').toString(); const operatorEmail = (body.operator_email || (body.operator||{}).email || '').toString(); const operatorSlack = (body.operator_slack || (body.operator||{}).slack_user || '').toString(); const operatorName = (body.operator_name || (body.operator||{}).name || '').toString(); const channelPref = (body.notify_channel || (operatorSlack ? 'slack' : 'email')).toString().toLowerCase(); $json.record_id = recordId; $json.operator = { email: operatorEmail, slack_user: operatorSlack, name: operatorName, channel: channelPref }; $json.notify_channel = channelPref; $json.message = `You have been assigned to record #${recordId}.`; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        -16
+      ],
+      "id": "op-assign-normalize",
+      "name": "op-assign-normalize"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if-slack-equals",
+              "leftValue": "={{ $json.notify_channel }}",
+              "rightValue": "slack",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        -16
+      ],
+      "id": "if-slack",
+      "name": "If Slack"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if-email-equals",
+              "leftValue": "={{ $json.notify_channel }}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        80
+      ],
+      "id": "if-email",
+      "name": "If Email"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.OPERATOR_SLACK_FALLBACK_CHANNEL || $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "={{ 'Operator assigned: #' + ($json.record_id || 'unknown') + ($json.operator?.name ? (' to ' + $json.operator.name) : '') + ($json.operator?.slack_user ? (' (user: ' + $json.operator.slack_user + ')') : '') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        -16
+      ],
+      "id": "notify-operator-slack",
+      "name": "notify-operator-slack",
+      "disabled": true,
+      "continueOnFail": true,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.OPERATOR_EMAIL_API_URL || ($env.DUMMY_API_BASE || 'https://httpbin.org/anything') + '/dummy/email' }}",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ to: ($json.operator||{}).email || 'dummy@mock.local', subject: 'Operator Assignment', body: $json.message }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        80
+      ],
+      "id": "notify-operator-email",
+      "name": "notify-operator-email"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'operator_notified', channel: $json.notify_channel, timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        32
+      ],
+      "id": "log-operator-notified",
+      "name": "log-operator-notified"
+    },
+    {
+      "parameters": {
+        "jsCode": "const it = $input.first().json || {}; const inquiry = it.inquiry || it.Inquiry || ''; const aiDraft = it.ai_draft || it['AI Draft'] || ''; const recordId = it.record_id || it['Record ID'] || it['Record Id'] || 'unknown'; const prompt = `Respond ONLY with JSON in this exact shape: {\\\"pathway\\\":{\\\"timeline\\\":[{\\\"step\\\":\\\"<text>\\\",\\\"eta_days\\\":<int>}],\\\"parameters\\\":{\\\"priority\\\":\\\"<low|normal|high>\\\",\\\"owner\\\":\\\"<role>\\\"}}}. No prose.\\n\\nInput:\\nrecord_id: ${recordId}\\ninquiry: ${inquiry}\\nai_draft: ${aiDraft}`; $json.prompt = prompt; $json.record_id = recordId; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -144
+      ],
+      "id": "w10-build-pathway-prompt",
+      "name": "w10-build-pathway-prompt"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        480,
+        -144
+      ],
+      "id": "w10-ai-pathway",
+      "name": "w10-ai-pathway",
+      "disabled": true,
+      "continueOnFail": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "dummy",
+          "name": "Dummy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $json?.choices?.[0]?.message?.content; let pathway = {}; if (content && typeof content === 'object' && content.pathway) { pathway = content.pathway; } else if (content && typeof content === 'string') { try { const parsed = JSON.parse(content); pathway = parsed.pathway || parsed; } catch (e) { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } } else { pathway = { timeline: [{ step: 'Initial review', eta_days: 1 }], parameters: { priority: 'normal', owner: 'ops' } }; } const recordId = $json.record_id || 'unknown'; const base = $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything'; const token = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0,24); const ackUrl = `${base}/webhook/w10-ack?token=${encodeURIComponent(token)}`; const globalData = getWorkflowStaticData('global'); if (!globalData.ackTokens) globalData.ackTokens = {}; if (!globalData.ackReceived) globalData.ackReceived = {}; globalData.ackTokens[token] = recordId; if (globalData.ackReceived[recordId] !== true) globalData.ackReceived[recordId] = false; $json.pathway = pathway; $json.ack_token = token; $json.ack_url = ackUrl; $json.dispatchPayload = { record_id: recordId, pathway, ack_url: ackUrl, generated_at: new Date().toISOString() }; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -144
+      ],
+      "id": "w10-shape-pathway",
+      "name": "w10-shape-pathway"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EXTERNAL_PARTY_WEBHOOK_URL || 'https://httpbin.org/anything/external' }}",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify($json.dispatchPayload) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        992,
+        -144
+      ],
+      "id": "w10-dispatch-external",
+      "name": "w10-dispatch-external"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'pathway_dispatched', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1248,
+        -144
+      ],
+      "id": "w10-log-dispatched",
+      "name": "w10-log-dispatched"
+    },
+    {
+      "parameters": {
+        "amount": "={{ parseInt($env.ACK_TIMEOUT_HOURS || $json.ACK_TIMEOUT_HOURS || '2') }}",
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        992,
+        -80
+      ],
+      "id": "w10-wait-for-ack",
+      "name": "w10-wait-for-ack",
+      "webhookId": "={{ $env.WEBHOOK_W10_WAIT_ACK_ID || 'w10wait-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const globalData = getWorkflowStaticData('global'); const rec = $json.record_id || 'unknown'; const acked = !!(globalData.ackReceived && globalData.ackReceived[rec]); $json.missingAck = acked ? 'ok' : 'missing'; return $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -80
+      ],
+      "id": "w10-check-ack",
+      "name": "w10-check-ack"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "if-missing-ack",
+              "leftValue": "={{ $json.missingAck }}",
+              "rightValue": "missing",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        -80
+      ],
+      "id": "w10-if-missing-ack",
+      "name": "w10-if-missing-ack"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "={{ 'No ACK received within timeout for record #' + ($json.record_id || 'unknown') + '. Last ack_url: ' + ($json.ack_url || 'n/a') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1728,
+        -80
+      ],
+      "id": "w10-escalate-missing",
+      "name": "w10-escalate-missing",
+      "disabled": true,
+      "continueOnFail": true,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'ack_missing_escalated', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1968,
+        -80
+      ],
+      "id": "w10-log-ack-escalation",
+      "name": "w10-log-ack-escalation"
+    },
+    {
+      "parameters": {
+        "path": "w10-ack",
+        "httpMethod": "GET",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        2080
+      ],
+      "id": "w10-ack-webhook",
+      "name": "w10-ack-webhook",
+      "webhookId": "={{ $env.WEBHOOK_W10_ACK_ID || 'ack-' + Math.random().toString(36).slice(2) }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $json.query || {};\nconst token = (q.token || '').toString();\nconst test = (q.test || '').toString();\nconst testRecordId = (q.record_id || '').toString();\nconst globalData = getWorkflowStaticData('global');\nconst map = globalData.ackTokens || {};\nlet recId = map[token];\nif (!recId && test === '1' && testRecordId) {\n  recId = testRecordId;\n}\nif (recId) {\n  if (!globalData.ackReceived) globalData.ackReceived = {};\n  globalData.ackReceived[recId] = true;\n  $json.record_id = recId;\n  $json.ack_status = 'valid';\n} else {\n  $json.record_id = 'unknown';\n  $json.ack_status = 'invalid';\n}\nreturn $json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        2080
+      ],
+      "id": "w10-parse-ack",
+      "name": "w10-parse-ack"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ack-valid",
+              "leftValue": "={{ $json.ack_status }}",
+              "rightValue": "valid",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        2080
+      ],
+      "id": "w10-ack-valid",
+      "name": "w10-ack-valid"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'ack_received', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        2080
+      ],
+      "id": "w10-save-ack",
+      "name": "w10-save-ack"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://httpbin.org/anything' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'ack_logged', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        2080
+      ],
+      "id": "w10-log-ack-received",
+      "name": "w10-log-ack-received"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": "={{ $env.SLACK_INTERNAL_TEAM_CHANNEL || 'C0000000000' }}",
+        "text": "={{ 'Invalid ACK token received for record #' + ($json.record_id || 'unknown') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        -240,
+        2144
+      ],
+      "id": "w10-escalate-invalid-ack",
+      "name": "w10-escalate-invalid-ack",
+      "disabled": true,
+      "continueOnFail": true,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1jSm8r6Tmacc60Wn",
+          "name": "Slack account"
+        }
+      },
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.N8N_BASE_URL || $env.N8N_BASE_URL || 'https://timi2025.app.n8n.cloud' }}/webhook/w8-meta-log",
+        "options": {},
+        "jsonParameters": true,
+        "sendBody": true,
+        "method": "POST",
+        "authentication": "none",
+        "bodyParametersJson": "={{ JSON.stringify({ record_id: $json.record_id, action: 'invalid_ack_escalated', timestamp: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        2144
+      ],
+      "id": "w10-log-invalid-ack",
+      "name": "w10-log-invalid-ack",
+      "continueOnFail": true
+    }
+    ,
+    {
+      "parameters": {
+        "content": "## Workflow 10\nPathway generation, external dispatch, ACK + escalation",
+        "height": 208,
+        "width": 1792,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        2096
+      ],
+      "id": "w10-note",
+      "name": "Sticky Note10"
+    }
+  ],
+  "pinData": {
+    "reviewDecision": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.arctix.ai",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US,en;q=0.5",
+            "cookie": "rl_page_init_referrer=RudderEncrypt%3AU2FsdGVkX1%2BWWdsys9WZcBV8zliMjaDAdxdsVetfzQg%3D; rl_page_init_referring_domain=RudderEncrypt%3AU2FsdGVkX19YfzGHv%2BuRvsd5QRqEOXSJtb6rCDe24Ys%3D; rl_anonymous_id=RudderEncrypt%3AU2FsdGVkX19hMPPGs4wmVgPrhGxqN06R3d7WUZFEQV8YOTqkeFUORFDZ5eT5b%2BRDQc2Zg7d%2BZTr3an7M8PumpQ%3D%3D; rl_user_id=RudderEncrypt%3AU2FsdGVkX1%2BqYoAoUlpFmrinFrVDaXZNPvIJ2JkqGlUvFWX8OkoSRt9M3FMt0WQz4a0Lk%2BUzl%2B%2FCObfOVWYQpalW1hk8bdE7L%2FIhNvr5JMIe8V5xo5ehJz3CdYP4fTZeF4rQnBnT9NjxMe04GBXBR2S3OJ4BjyhX1OPrxHb%2Faew%3D; rl_trait=RudderEncrypt%3AU2FsdGVkX19Qxbu51CsTnQHkMAWe4NTSyvdl6GNq92Nl4li27eu%2FsTcOhk%2Bpze870VA35isI9QjdcclvJmcmVe4Ehi5T5ZHiILEt6iz3nnuaMTKec8Y9b04IhVz8RBEcNvw89b0ZPfmOSNmVgpe4xA%3D%3D; ph_phc_4URIAm1uYfJO7j8kWSe0J8lc8IqnstRLS7Jx8NcakHo_posthog=%7B%22distinct_id%22%3A%22fba89d80789a74fb92fde65d09991d398b7e328e4bfec907a1d691a3d74e87bc%23c4ea1716-18c6-4cc4-ac19-26d4db6d4fb4%22%2C%22%24sesid%22%3A%5B1757066665995%2C%2201991903-e99d-7ffa-bc6d-18e61f8c38ab%22%2C1757061310877%5D%2C%22%24epp%22%3Atrue%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fn8n.arctix.ai%2Fsignin%3Fredirect%3D%25252F%22%7D%7D; rl_session=RudderEncrypt%3AU2FsdGVkX19hMhTDWT8LlTuEIQjt9pmTZaf%2FXOExZYk%2B5iTOvYvnLQnRX1dqiDZva%2FIUPuzCB5o0TXPuHgrv7iXTLhiNMj4JCzSTNTuisIL16gzatv4jco9Vz9IAwievpbr7yH%2BA6h3eB%2B1hJFd3zw%3D%3D",
+            "if-none-match": "W/\"22-6OS7cK0FzqnV2NeDHdOSGS1bVUs\"",
+            "priority": "u=0, i",
+            "sec-ch-ua": "\"Chromium\";v=\"140\", \"Not=A?Brand\";v=\"24\", \"Brave\";v=\"140\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-user": "?1",
+            "sec-gpc": "1",
+            "upgrade-insecure-requests": "1",
+            "via": "2.0 Caddy",
+            "x-forwarded-for": "104.28.237.156",
+            "x-forwarded-host": "n8n.arctix.ai",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {
+            "record_id": "awe568hc8",
+            "decision": "escalate"
+          },
+          "body": {},
+          "webhookUrl": "https://n8n.arctix.ai/webhook/review",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "incoming data": [
+      {
+        "json": {
+          "Record Id": "d2r5d8hn5",
+          "Inquiry": "We're looking to automate our financial reporting. Every week, my team manually pulls data from Stripe, our CRM, and bank statements to create a single report. We need a solution that automatically consolidates this data into a live dashboard to save time and reduce errors. Let us know how long this will take and what you will need from us or when can we book a meeting."
+        }
+      }
+    ],
+    "Message a model": [
+      {
+        "json": {
+          "id": "chatcmpl-CCOtzx8AsgknoBghydhOtoJDLnvgb",
+          "object": "chat.completion",
+          "created": 1757071695,
+          "model": "gpt-4.1-mini-2025-04-14",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": {
+                  "Record_ID": "d2r5d8hn5",
+                  "Inquiry": "We're looking to automate our financial reporting. Every week, my team manually pulls data from Stripe, our CRM, and bank statements to create a single report. We need a solution that automatically consolidates this data into a live dashboard to save time and reduce errors. Let us know how long this will take and what you will need from us or when can we book a meeting.",
+                  "AI_Draft": "Thank you for reaching out. We can help automate your financial reporting by integrating data from Stripe, your CRM, and bank statements into a live dashboard. To provide an accurate timeline, we'll need access details for these platforms and to understand your specific reporting requirements. Please let us know your availability for a meeting to discuss the next steps and implementation timeline."
+                },
+                "refusal": null,
+                "annotations": []
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 661,
+            "completion_tokens": 174,
+            "total_tokens": 835,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "audio_tokens": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "audio_tokens": 0,
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0
+            }
+          },
+          "service_tier": "default",
+          "system_fingerprint": "fp_6d7dcc9a98"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Run Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Tracker": {
+      "main": [
+        [
+          {
+            "node": "va-build-task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "va-build-task": {
+      "main": [
+        [
+          {
+            "node": "va-create-task",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Created",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "w10-build-pathway-prompt",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "va-create-task": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "change status (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "escalate": {
+      "main": [
+        [
+          {
+            "node": "Create Escalation (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "escalation": {
+      "main": [
+        [
+          {
+            "node": "Audit Escalation (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Escalation (VA)": {
+      "main": [
+        [
+          {
+            "node": "escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "block format": {
+      "main": [
+        [
+          {
+            "node": "content review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "content review": {
+      "main": [
+        [
+          {
+            "node": "Log Review Notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "block format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "change status (VA)": {
+      "main": [
+        [
+          {
+            "node": "escalate",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Decision",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Log Decision": {
+      "main": [
+        []
+      ]
+    },
+    
+    "reviewDecision": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    
+    "not sent": {
+      "main": [
+        [
+          {
+            "node": "internal team",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Audit Escalation (VA)",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "internal team": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    
+    "Log Completed": {
+      "main": [
+        [
+          {
+            "node": "Call Broadcaster",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Log Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "incoming data": {
+      "main": [
+        [
+          {
+            "node": "Env Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Env Config": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit / Dedupe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit / Dedupe": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w4-cron": {
+      "main": [
+        [
+          {
+            "node": "Fetch Completed (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Completed (VA)": {
+      "main": [
+        [
+          {
+            "node": "Filter Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Completed": {
+      "main": [
+        [
+          {
+            "node": "not sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    
+    "3 min": {
+      "main": [
+        [
+          {
+            "node": "not sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w5-trigger": {
+      "main": [
+        [
+          {
+            "node": "w5-build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w5-build": {
+      "main": [
+        [
+          {
+            "node": "w5-send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w5-send": {
+      "main": [
+        [
+          {
+            "node": "w5-log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w6-cron": {
+      "main": [
+        [
+          {
+            "node": "w6-fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w6-fetch": {
+      "main": [
+        [
+          {
+            "node": "w6-map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w6-map": {
+      "main": [
+        [
+          {
+            "node": "w6-store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w6-store": {
+      "main": [
+        [
+          {
+            "node": "w6-log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w7-cron": {
+      "main": [
+        [
+          {
+            "node": "w7-build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w7-build": {
+      "main": [
+        [
+          {
+            "node": "w7-send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w7-send": {
+      "main": [
+        [
+          {
+            "node": "Store Nudge (VA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Nudge (VA)": {
+      "main": [
+        [
+          {
+            "node": "w7-log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w8-hook": {
+      "main": [
+        [
+          {
+            "node": "w8-score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w8-score": {
+      "main": [
+        [
+          {
+            "node": "w8-store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w9-hook": {
+      "main": [
+        [
+          {
+            "node": "w9-build-prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w9-build-prompt": {
+      "main": [
+        [
+          {
+            "node": "w9-ai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w9-ai": {
+      "main": [
+        [
+          {
+            "node": "w9-shape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w9-shape": {
+      "main": [
+        [
+          {
+            "node": "w9-store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w9-store": {
+      "main": [
+        [
+          {
+            "node": "w9-log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Error": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "op-assign-hook": {
+      "main": [
+        [
+          {
+            "node": "op-assign-normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "op-assign-normalize": {
+      "main": [
+        [
+          {
+            "node": "If Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Email",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If Slack": {
+      "main": [
+        [
+          {
+            "node": "notify-operator-slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Email": {
+      "main": [
+        [
+          {
+            "node": "notify-operator-email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-operator-slack": {
+      "main": [
+        [
+          {
+            "node": "log-operator-notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notify-operator-email": {
+      "main": [
+        [
+          {
+            "node": "log-operator-notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-build-pathway-prompt": {
+      "main": [
+        [
+          {
+            "node": "w10-ai-pathway",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-ai-pathway": {
+      "main": [
+        [
+          {
+            "node": "w10-shape-pathway",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-shape-pathway": {
+      "main": [
+        [
+          {
+            "node": "w10-dispatch-external",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-dispatch-external": {
+      "main": [
+        [
+          {
+            "node": "w10-log-dispatched",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "w10-wait-for-ack",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "w10-wait-for-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-check-ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-check-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-if-missing-ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-if-missing-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-escalate-missing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "w10-log-ack-escalation",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "w10-ack-webhook": {
+      "main": [
+        [
+          {
+            "node": "w10-parse-ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-parse-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-ack-valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "w10-ack-valid": {
+      "main": [
+        [
+          {
+            "node": "w10-save-ack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "w10-escalate-invalid-ack",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "w10-log-invalid-ack",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "w10-save-ack": {
+      "main": [
+        [
+          {
+            "node": "w10-log-ack-received",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "yZzsgVqt7O5zJERG"
+  },
+  "versionId": "4ced6fb3-2d73-4948-8a75-5fc7ef82c912",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fba89d80789a74fb92fde65d09991d398b7e328e4bfec907a1d691a3d74e87bc"
+  },
+  "id": "yZzsgVqt7O5zJERG",
+  "tags": []
+} 

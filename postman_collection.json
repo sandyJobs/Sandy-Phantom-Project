@@ -13,13 +13,13 @@
           { "key": "Content-Type", "value": "application/json" }
         ],
         "url": {
-          "raw": "{{N8N_BASE_URL}}/webhook/operator-assigned",
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/operator-assigned",
           "host": ["{{N8N_BASE_URL}}"],
-          "path": ["webhook", "operator-assigned"]
+          "path": ["{{WEBHOOK_PREFIX}}", "operator-assigned"]
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"record_id\": \"pm-001\",\n  \"operator\": { \"email\": \"op@example.com\", \"slack_user\": \"U12345\", \"name\": \"Pat Operator\" },\n  \"notify_channel\": \"slack\"\n}"
+          "raw": "{\n  \"record_id\": \"pm-001\",\n  \"operator\": { \"email\": \"op@example.com\", \"name\": \"Pat Operator\" },\n  \"notify_channel\": \"email\"\n}"
         }
       }
     },
@@ -31,9 +31,9 @@
           { "key": "Content-Type", "value": "application/json" }
         ],
         "url": {
-          "raw": "{{N8N_BASE_URL}}/webhook/incoming",
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/incoming",
           "host": ["{{N8N_BASE_URL}}"],
-          "path": ["webhook", "incoming"]
+          "path": ["{{WEBHOOK_PREFIX}}", "incoming"]
         },
         "body": {
           "mode": "raw",
@@ -46,9 +46,9 @@
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{N8N_BASE_URL}}/webhook/review?record_id=pm-002&decision=approve",
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/review?record_id=pm-002&decision=approve",
           "host": ["{{N8N_BASE_URL}}"],
-          "path": ["webhook", "review"],
+          "path": ["{{WEBHOOK_PREFIX}}", "review"],
           "query": [
             {"key": "record_id", "value": "pm-002"},
             {"key": "decision", "value": "approve"}
@@ -57,20 +57,35 @@
       }
     },
     {
-      "name": "2c) Fetch last w10 ack_url (meta log)",
+      "name": "2c) Log meta: pathway_dispatched (w8-meta-log)",
       "request": {
         "method": "POST",
         "header": [
           { "key": "Content-Type", "value": "application/json" }
         ],
         "url": {
-          "raw": "{{N8N_BASE_URL}}/webhook/w8-meta-log",
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/w8-meta-log",
           "host": ["{{N8N_BASE_URL}}"],
-          "path": ["webhook", "w8-meta-log"]
+          "path": ["{{WEBHOOK_PREFIX}}", "w8-meta-log"]
         },
         "body": {
           "mode": "raw",
           "raw": "{\n  \"action\": \"pathway_dispatched\",\n  \"record_id\": \"pm-002\"\n}"
+        }
+      }
+    },
+    {
+      "name": "2d) ACK test-mode (no token)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/w10-ack?test=1&record_id=pm-002",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["{{WEBHOOK_PREFIX}}", "w10-ack"],
+          "query": [
+            { "key": "test", "value": "1" },
+            { "key": "record_id", "value": "pm-002" }
+          ]
         }
       }
     },
@@ -95,9 +110,9 @@
           { "key": "Content-Type", "value": "application/json" }
         ],
         "url": {
-          "raw": "{{N8N_BASE_URL}}/webhook/w8-meta-log",
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/w8-meta-log",
           "host": ["{{N8N_BASE_URL}}"],
-          "path": ["webhook", "w8-meta-log"]
+          "path": ["{{WEBHOOK_PREFIX}}", "w8-meta-log"]
         },
         "body": {
           "mode": "raw",
@@ -110,9 +125,9 @@
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{N8N_BASE_URL}}/webhook/w10-ack?token={{ACK_TOKEN}}",
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/w10-ack?token={{ACK_TOKEN}}",
           "host": ["{{N8N_BASE_URL}}"],
-          "path": ["webhook", "w10-ack"],
+          "path": ["{{WEBHOOK_PREFIX}}", "w10-ack"],
           "query": [
             { "key": "token", "value": "{{ACK_TOKEN}}" }
           ]
@@ -124,18 +139,51 @@
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{N8N_BASE_URL}}/webhook/w10-ack?token=INVALID",
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/w10-ack?token=INVALID",
           "host": ["{{N8N_BASE_URL}}"],
-          "path": ["webhook", "w10-ack"],
+          "path": ["{{WEBHOOK_PREFIX}}", "w10-ack"],
           "query": [
             { "key": "token", "value": "INVALID" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "5) Broadcast webhook (w5-broadcast)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/w5-broadcast",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["{{WEBHOOK_PREFIX}}", "w5-broadcast"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"record_id\": \"pm-002\"\n}"
+        }
+      }
+    },
+    {
+      "name": "9) Draft restyle (w9-rewrite)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{N8N_BASE_URL}}/{{WEBHOOK_PREFIX}}/w9-rewrite?draft=Please%20restyle%20this%20text%20into%20a%20concise%20and%20polite%20response.",
+          "host": ["{{N8N_BASE_URL}}"],
+          "path": ["{{WEBHOOK_PREFIX}}", "w9-rewrite"],
+          "query": [
+            { "key": "draft", "value": "Please restyle this text into a concise and polite response." }
           ]
         }
       }
     }
   ],
   "variable": [
-    { "key": "N8N_BASE_URL", "value": "https://httpbin.org/anything" },
+    { "key": "N8N_BASE_URL", "value": "https://timi2025.app.n8n.cloud" },
+    { "key": "WEBHOOK_PREFIX", "value": "webhook" },
     { "key": "ACK_TOKEN", "value": "" }
   ]
 }
